@@ -14,7 +14,7 @@ import type { ArchitectNodeData, ProjectConfig, HistoryEntry, BuildStatus } from
 interface AppState {
   nodes: Node<ArchitectNodeData>[]
   edges: Edge[]
-  onNodesChange: OnNodesChange
+  onNodesChange: OnNodesChange<Node<ArchitectNodeData>>
   onEdgesChange: OnEdgesChange
   onConnect: OnConnect
   addNode: (node: Node<ArchitectNodeData>) => void
