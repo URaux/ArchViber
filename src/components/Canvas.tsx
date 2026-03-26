@@ -21,6 +21,7 @@ export function Canvas() {
   const onEdgesChange = useAppStore((state) => state.onEdgesChange)
   const onConnect = useAppStore((state) => state.onConnect)
   const addNode = useAppStore((state) => state.addNode)
+  const setSelectedNodeId = useAppStore((state) => state.setSelectedNodeId)
   const { screenToFlowPosition } = useReactFlow()
 
   const onDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
@@ -67,6 +68,10 @@ export function Canvas() {
         onConnect={onConnect}
         onDrop={onDrop}
         onDragOver={onDragOver}
+        onPaneClick={() => setSelectedNodeId(null)}
+        onSelectionChange={({ nodes: selectedNodes }) => {
+          setSelectedNodeId(selectedNodes[0]?.id ?? null)
+        }}
         fitView
         className="bg-gray-800"
       >

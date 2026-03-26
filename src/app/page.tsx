@@ -3,6 +3,7 @@
 import { ReactFlowProvider } from '@xyflow/react'
 import { BuildButton } from '@/components/BuildButton'
 import { Canvas } from '@/components/Canvas'
+import { ChatPanel } from '@/components/ChatPanel'
 import { NodePalette } from '@/components/NodePalette'
 import { StatusBar } from '@/components/StatusBar'
 import { useAgentStatus } from '@/hooks/useAgentStatus'
@@ -31,10 +32,7 @@ export default function Home() {
             <Canvas />
           </section>
           <aside className="flex h-full w-80 flex-col border-l border-gray-800 bg-gray-900 p-4">
-            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-300">AI Chat</h2>
-            <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-gray-700 bg-gray-800/60 p-4 text-sm text-gray-500">
-              ChatPanel placeholder
-            </div>
+            <ChatPanel />
           </aside>
         </div>
         <StatusBar />
