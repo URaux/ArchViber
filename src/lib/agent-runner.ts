@@ -33,17 +33,19 @@ interface AgentRecord {
   process: SpawnedProcess
 }
 
-function getCommand(backend: AgentBackend) {
+function getCommand(backend: AgentBackend, prompt: string) {
   if (backend === 'codex') {
     return {
       command: 'codex',
-      args: ['--full-auto'],
+      args: ['exec', '--full-auto', prompt],
+      pipeStdin: false,
     }
   }
 
   return {
     command: 'claude',
     args: ['-p', '--output-format', 'stream-json', '--verbose'],
+    pipeStdin: true,
   }
 }
 
@@ -59,7 +61,7 @@ export class AgentRunner extends EventEmitter {
 
   spawnAgent(nodeId: string, prompt: string, backend: AgentBackend, workDir: string) {
     const agentId = `${nodeId}-${Date.now()}-${this.nextId++}`
-    const { command, args } = getCommand(backend)
+    const { command, args, pipeStdin } = getCommand(backend, prompt)
     const env = { ...process.env }
     // Remove ANTHROPIC_API_KEY so claude CLI uses OAuth session instead of
     // potentially invalid/proxy API keys inherited from the parent process.
@@ -73,7 +75,9 @@ export class AgentRunner extends EventEmitter {
       stdio: ['pipe', 'pipe', 'pipe'],
     }) as SpawnedProcess
 
-    child.stdin?.write(prompt)
+    if (pipeStdin) {
+      child.stdin?.write(prompt)
+    }
     child.stdin?.end()
 
     const info: AgentProcessInfo = {
