@@ -45,19 +45,34 @@ function getCommand(backend: AgentBackend, prompt: string, model?: string) {
     const args = ['exec', '--full-auto']
     if (model) args.push('--model', model)
     args.push(shellQuote(prompt))
-    return { command: 'codex', args, pipeStdin: false }
+    return { command: 'codex', args, pipeStdin: false, useShell: undefined }
   }
 
   if (backend === 'gemini') {
+    // On Windows, gemini is a .ps1 script that cmd.exe can't run.
+    // Spawn node directly with the CLI entry point.
+    if (process.platform === 'win32') {
+      let geminiScript: string | undefined
+      try {
+        geminiScript = require.resolve('@google/gemini-cli/dist/index.js')
+      } catch {
+        // Global install — use npm-global path
+        const npmGlobal = process.env.NPM_GLOBAL_PATH ?? 'E:/tools/npm-global'
+        geminiScript = `${npmGlobal}/node_modules/@google/gemini-cli/dist/index.js`
+      }
+      const args = ['--no-warnings=DEP0040', geminiScript, '-p', prompt]
+      if (model) args.push('-m', model)
+      return { command: process.execPath, args, pipeStdin: false, useShell: false }
+    }
     const args = ['-p', prompt]
     if (model) args.push('-m', model)
-    return { command: 'gemini', args, pipeStdin: false }
+    return { command: 'gemini', args, pipeStdin: false, useShell: undefined }
   }
 
   // claude-code
   const args = ['-p', '--output-format', 'stream-json', '--verbose']
   if (model) args.push('--model', model)
-  return { command: 'claude', args, pipeStdin: true }
+  return { command: 'claude', args, pipeStdin: true, useShell: undefined }
 }
 
 export class AgentRunner extends EventEmitter {
@@ -72,7 +87,7 @@ export class AgentRunner extends EventEmitter {
 
   spawnAgent(nodeId: string, prompt: string, backend: AgentBackend, workDir: string, model?: string) {
     const agentId = `${nodeId}-${Date.now()}-${this.nextId++}`
-    const { command, args, pipeStdin } = getCommand(backend, prompt, model)
+    const { command, args, pipeStdin, useShell } = getCommand(backend, prompt, model)
     const env = { ...process.env }
     // Remove ANTHROPIC_API_KEY so claude CLI uses OAuth session instead of
     // potentially invalid/proxy API keys inherited from the parent process.
@@ -81,7 +96,7 @@ export class AgentRunner extends EventEmitter {
     const child = spawn(command, args, {
       cwd: workDir,
       env,
-      shell: process.platform === 'win32',
+      shell: useShell ?? (process.platform === 'win32'),
       stdio: ['pipe', 'pipe', 'pipe'],
     }) as SpawnedProcess
 
