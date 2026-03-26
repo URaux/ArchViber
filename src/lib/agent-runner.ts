@@ -1,6 +1,7 @@
 import { spawn } from 'child_process'
 import { EventEmitter } from 'events'
 import type { Writable } from 'stream'
+import { StringDecoder } from 'string_decoder'
 import { clampMaxParallel } from '@/lib/config'
 import type { ProjectConfig } from '@/lib/types'
 
@@ -81,14 +82,17 @@ export class AgentRunner extends EventEmitter {
     this.agents.set(agentId, { info, process: child })
     this.emit('status', { agentId, nodeId, status: 'running' satisfies AgentStatus })
 
+    const stdoutDecoder = new StringDecoder('utf8')
+    const stderrDecoder = new StringDecoder('utf8')
+
     child.stdout?.on('data', (chunk: Buffer | string) => {
-      const text = chunk.toString()
+      const text = typeof chunk === 'string' ? chunk : stdoutDecoder.write(chunk)
       info.output += text
       this.emit('output', { agentId, nodeId, text })
     })
 
     child.stderr?.on('data', (chunk: Buffer | string) => {
-      const text = chunk.toString()
+      const text = typeof chunk === 'string' ? chunk : stderrDecoder.write(chunk)
       info.output += text
       info.errorMessage = text
       this.emit('output', { agentId, nodeId, text })
@@ -99,6 +103,19 @@ export class AgentRunner extends EventEmitter {
     })
 
     child.once('close', (code) => {
+      const stdoutRemainder = stdoutDecoder.end()
+      const stderrRemainder = stderrDecoder.end()
+
+      if (stdoutRemainder) {
+        info.output += stdoutRemainder
+        this.emit('output', { agentId, nodeId, text: stdoutRemainder })
+      }
+
+      if (stderrRemainder) {
+        info.output += stderrRemainder
+        info.errorMessage = stderrRemainder
+      }
+
       if (info.status === 'error' && info.exitCode === null) {
         return
       }
