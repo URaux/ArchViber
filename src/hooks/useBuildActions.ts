@@ -101,6 +101,7 @@ export function useBuildActions() {
           prompts,
           backend: config.agent,
           workDir: config.workDir,
+          maxParallel: config.maxParallel,
         }),
       })
 

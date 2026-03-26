@@ -10,6 +10,7 @@ import {
   addEdge,
 } from '@xyflow/react'
 import type { ArchitectNodeData, ProjectConfig, HistoryEntry, BuildStatus } from './types'
+import { clampMaxParallel } from './config'
 
 type SaveState = 'saved' | 'saving'
 
@@ -78,7 +79,16 @@ export const useAppStore = create<AppState>((set, get) => ({
   projectName: '未命名项目',
   setProjectName: (name) => set({ projectName: name }),
   config: { agent: 'claude-code', workDir: './output', maxParallel: 3 },
-  setConfig: (config) => set({ config: { ...get().config, ...config } }),
+  setConfig: (config) =>
+    set({
+      config: {
+        ...get().config,
+        ...config,
+        ...(typeof config.maxParallel === 'number'
+          ? { maxParallel: clampMaxParallel(config.maxParallel) }
+          : {}),
+      },
+    }),
   history: [],
   addHistory: (entry) => set({ history: [...get().history, entry] }),
   saveState: 'saved',

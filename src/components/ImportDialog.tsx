@@ -20,6 +20,7 @@ function getProjectNameFromPath(dir: string) {
 }
 
 export function ImportDialog({ open, onClose }: ImportDialogProps) {
+  const backend = useAppStore((state) => state.config.agent)
   const setCanvas = useAppStore((state) => state.setCanvas)
   const setProjectName = useAppStore((state) => state.setProjectName)
   const [dir, setDir] = useState('')
@@ -46,7 +47,7 @@ export function ImportDialog({ open, onClose }: ImportDialogProps) {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ dir: trimmedDir }),
+        body: JSON.stringify({ dir: trimmedDir, backend }),
       })
 
       const payload = (await response.json()) as Partial<ImportResponse> & { error?: string }

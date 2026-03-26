@@ -1,5 +1,6 @@
 import { spawn } from 'child_process'
 import { EventEmitter } from 'events'
+import { clampMaxParallel } from '@/lib/config'
 import type { ProjectConfig } from '@/lib/types'
 
 export type AgentBackend = ProjectConfig['agent']
@@ -133,17 +134,23 @@ export class AgentRunner extends EventEmitter {
     waves: string[][],
     prompts: Map<string, string>,
     backend: AgentBackend,
-    workDir: string
+    workDir: string,
+    maxParallel: number
   ) {
+    const concurrency = clampMaxParallel(maxParallel)
+
     for (const [waveIndex, wave] of waves.entries()) {
       this.emit('wave-start', waveIndex)
       this.emit('wave', { wave: waveIndex })
 
-      const agentIds = wave.map((nodeId) =>
-        this.spawnAgent(nodeId, prompts.get(nodeId) ?? '', backend, workDir)
-      )
+      for (let index = 0; index < wave.length; index += concurrency) {
+        const batch = wave.slice(index, index + concurrency)
+        const agentIds = batch.map((nodeId) =>
+          this.spawnAgent(nodeId, prompts.get(nodeId) ?? '', backend, workDir)
+        )
 
-      await Promise.all(agentIds.map((agentId) => this.waitForAgent(agentId)))
+        await Promise.all(agentIds.map((agentId) => this.waitForAgent(agentId)))
+      }
     }
   }
 

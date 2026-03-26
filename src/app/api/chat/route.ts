@@ -15,6 +15,7 @@ interface ChatRequest {
   history?: ChatMessage[]
   nodeContext?: string
   architecture_yaml: string
+  backend?: AgentBackend
 }
 
 const CANVAS_ACTION_INSTRUCTIONS = [
@@ -35,7 +36,11 @@ function formatHistory(history: ChatMessage[] | undefined) {
   return history.map((entry) => `${entry.role.toUpperCase()}: ${entry.content}`).join('\n\n')
 }
 
-function getBackend(): AgentBackend {
+function getBackend(backend?: AgentBackend): AgentBackend {
+  if (backend === 'codex' || backend === 'claude-code') {
+    return backend
+  }
+
   return process.env.VIBE_CHAT_AGENT_BACKEND === 'codex' ? 'codex' : 'claude-code'
 }
 
@@ -71,7 +76,12 @@ export async function POST(request: Request) {
     return Response.json({ error: '消息内容不能为空。' }, { status: 400 })
   }
 
-  const agentId = agentRunner.spawnAgent('chat', buildPrompt(payload), getBackend(), process.cwd())
+  const agentId = agentRunner.spawnAgent(
+    'chat',
+    buildPrompt(payload),
+    getBackend(payload.backend),
+    process.cwd()
+  )
 
   let cleanup = () => undefined
 

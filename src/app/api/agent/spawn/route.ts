@@ -15,6 +15,7 @@ interface BuildAllRequest {
   prompts: Record<string, string>
   backend: AgentBackend
   workDir: string
+  maxParallel: number
 }
 
 export async function POST(request: Request) {
@@ -27,7 +28,8 @@ export async function POST(request: Request) {
       payload.waves,
       new Map(Object.entries(payload.prompts)),
       payload.backend,
-      payload.workDir
+      payload.workDir,
+      payload.maxParallel
     )
 
     return Response.json({ agentId })

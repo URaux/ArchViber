@@ -51,7 +51,7 @@ describe('AgentRunner', () => {
 
     runner.on('wave-start', (wave: number) => statusUpdates.push(`wave-${wave}`))
 
-    await runner.buildAll(waves, prompts, 'claude-code', '/tmp')
+    await runner.buildAll(waves, prompts, 'claude-code', '/tmp', 2)
 
     const wave0Idx = statusUpdates.indexOf('wave-0')
     const wave1Idx = statusUpdates.indexOf('wave-1')

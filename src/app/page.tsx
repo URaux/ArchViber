@@ -7,6 +7,7 @@ import { Canvas } from '@/components/Canvas'
 import { ChatPanel } from '@/components/ChatPanel'
 import { ImportDialog } from '@/components/ImportDialog'
 import { NodePalette } from '@/components/NodePalette'
+import { SettingsDialog } from '@/components/SettingsDialog'
 import { StatusBar } from '@/components/StatusBar'
 import { useAgentStatus } from '@/hooks/useAgentStatus'
 import { useAutoSave } from '@/hooks/useAutoSave'
@@ -16,6 +17,7 @@ export default function Home() {
   const workDir = useAppStore((state) => state.config.workDir)
   const chatOpen = useAppStore((state) => state.chatOpen)
   const [importOpen, setImportOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   useAgentStatus()
   useAutoSave(workDir)
@@ -53,7 +55,8 @@ export default function Home() {
           </aside>
         </div>
         <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
-        <StatusBar />
+        <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+        <StatusBar onOpenSettings={() => setSettingsOpen(true)} />
       </main>
     </ReactFlowProvider>
   )

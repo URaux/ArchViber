@@ -10,6 +10,7 @@ export const dynamic = 'force-dynamic'
 
 interface ImportProjectRequest {
   dir: string
+  backend?: 'claude-code' | 'codex'
 }
 
 interface JsonLike {
@@ -24,7 +25,11 @@ function isObject(value: unknown): value is JsonLike {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
-function getBackend() {
+function getBackend(backend?: 'claude-code' | 'codex') {
+  if (backend === 'codex' || backend === 'claude-code') {
+    return backend
+  }
+
   return process.env.VIBE_IMPORT_AGENT_BACKEND === 'codex' ? 'codex' : 'claude-code'
 }
 
@@ -196,7 +201,7 @@ function normalizeCanvas(payload: unknown) {
 }
 
 export async function POST(request: Request) {
-  const { dir } = (await request.json()) as ImportProjectRequest
+  const { dir, backend } = (await request.json()) as ImportProjectRequest
 
   if (!dir?.trim()) {
     return Response.json({ error: '项目目录路径不能为空。' }, { status: 400 })
@@ -207,7 +212,12 @@ export async function POST(request: Request) {
   }
 
   try {
-    const agentId = agentRunner.spawnAgent('project-import', buildPrompt(dir), getBackend(), dir)
+    const agentId = agentRunner.spawnAgent(
+      'project-import',
+      buildPrompt(dir),
+      getBackend(backend),
+      dir
+    )
     const status = await waitForCompletion(agentId)
     const agentText = extractAgentText(status.output)
     const parsed = extractJsonObject(agentText)

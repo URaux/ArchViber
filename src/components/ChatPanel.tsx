@@ -134,6 +134,7 @@ export function ChatPanel() {
   const nodes = useAppStore((state) => state.nodes)
   const edges = useAppStore((state) => state.edges)
   const projectName = useAppStore((state) => state.projectName)
+  const backend = useAppStore((state) => state.config.agent)
   const selectedNodeId = useAppStore((state) => state.selectedNodeId)
   const chatOpen = useAppStore((state) => state.chatOpen)
   const setChatOpen = useAppStore((state) => state.setChatOpen)
@@ -284,6 +285,7 @@ export function ChatPanel() {
           history: nextHistory,
           nodeContext,
           architecture_yaml: canvasToYaml(nodes, edges, projectName),
+          backend,
         }),
       })
 

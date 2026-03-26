@@ -3,6 +3,10 @@
 import { useAppStore } from '@/lib/store'
 import { agentBackendLabels } from '@/lib/ui-text'
 
+interface StatusBarProps {
+  onOpenSettings: () => void
+}
+
 function getBuildLabel(active: boolean, currentWave: number, totalWaves: number) {
   if (!active || totalWaves === 0) {
     return '构建待命'
@@ -11,7 +15,7 @@ function getBuildLabel(active: boolean, currentWave: number, totalWaves: number)
   return `构建波次 ${currentWave}/${totalWaves}`
 }
 
-export function StatusBar() {
+export function StatusBar({ onOpenSettings }: StatusBarProps) {
   const projectName = useAppStore((state) => state.projectName)
   const saveState = useAppStore((state) => state.saveState)
   const buildState = useAppStore((state) => state.buildState)
@@ -28,6 +32,13 @@ export function StatusBar() {
       <div className="flex flex-wrap items-center gap-4 text-xs uppercase tracking-[0.2em] text-gray-400">
         <span>{getBuildLabel(buildState.active, buildState.currentWave, buildState.totalWaves)}</span>
         <span>后端 {agentBackendLabels[backend]}</span>
+        <button
+          type="button"
+          onClick={onOpenSettings}
+          className="rounded-full border border-white/10 px-3 py-1 text-xs text-gray-300 transition hover:border-gray-500 hover:text-white"
+        >
+          ⚙️ 设置
+        </button>
       </div>
     </footer>
   )
