@@ -43,7 +43,7 @@ function getCommand(backend: AgentBackend) {
 
   return {
     command: 'claude',
-    args: ['--output-format', 'stream-json'],
+    args: ['-p', '--output-format', 'stream-json', '--verbose'],
   }
 }
 
@@ -60,8 +60,15 @@ export class AgentRunner extends EventEmitter {
   spawnAgent(nodeId: string, prompt: string, backend: AgentBackend, workDir: string) {
     const agentId = `${nodeId}-${Date.now()}-${this.nextId++}`
     const { command, args } = getCommand(backend)
+    const env = { ...process.env }
+    // Remove ANTHROPIC_API_KEY so claude CLI uses OAuth session instead of
+    // potentially invalid/proxy API keys inherited from the parent process.
+    if (backend === 'claude-code') {
+      delete env.ANTHROPIC_API_KEY
+    }
     const child = spawn(command, args, {
       cwd: workDir,
+      env,
       shell: process.platform === 'win32',
       stdio: ['pipe', 'pipe', 'pipe'],
     }) as SpawnedProcess

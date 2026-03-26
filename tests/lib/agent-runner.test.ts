@@ -44,7 +44,7 @@ describe('AgentRunner', () => {
     expect(runner.getStatus(id)?.status).toBe('running')
     expect(spawnMock).toHaveBeenCalledWith(
       'claude',
-      ['--output-format', 'stream-json'],
+      ['-p', '--output-format', 'stream-json', '--verbose'],
       expect.objectContaining({
         cwd: '/tmp',
         shell: process.platform === 'win32',
