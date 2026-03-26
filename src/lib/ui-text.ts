@@ -22,6 +22,12 @@ export function getBuildStatusLabel(status: BuildStatus) {
   return t(status)
 }
 
+const backendLabels: Record<ProjectConfig['agent'], string> = {
+  'claude-code': 'Claude Code',
+  codex: 'Codex',
+  gemini: 'Gemini',
+}
+
 export function getAgentBackendLabel(backend: ProjectConfig['agent']) {
-  return backend === 'claude-code' ? 'Claude Code' : 'Codex'
+  return backendLabels[backend] ?? backend
 }
