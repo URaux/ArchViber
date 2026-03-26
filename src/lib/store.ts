@@ -93,6 +93,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     }),
   selectedNodeId: null,
   setSelectedNodeId: (id) => set({ selectedNodeId: id }),
-  chatOpen: false,
+  chatOpen: true,
   setChatOpen: (open) => set({ chatOpen: open }),
 }))

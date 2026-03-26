@@ -14,6 +14,7 @@ import { useAppStore } from '@/lib/store'
 
 export default function Home() {
   const workDir = useAppStore((state) => state.config.workDir)
+  const chatOpen = useAppStore((state) => state.chatOpen)
   const [importOpen, setImportOpen] = useState(false)
 
   useAgentStatus()
@@ -21,13 +22,13 @@ export default function Home() {
 
   return (
     <ReactFlowProvider>
-      <main className="flex h-screen w-screen flex-col overflow-hidden bg-gray-950 text-white">
-        <header className="flex items-center justify-between border-b border-gray-800 bg-gray-950/95 px-5 py-3">
+      <main className="flex h-screen w-screen flex-col overflow-hidden bg-transparent text-white">
+        <header className="vp-panel flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-5 py-3">
           <div>
             <h1 className="text-sm font-semibold uppercase tracking-[0.3em] text-gray-100">Vibe Pencil</h1>
             <p className="text-xs text-gray-500">Topology-aware builds for architecture nodes</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => setImportOpen(true)}
@@ -38,12 +39,16 @@ export default function Home() {
             <BuildButton />
           </div>
         </header>
-        <div className="flex min-h-0 flex-1 overflow-hidden">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden xl:flex-row">
           <NodePalette />
-          <section className="min-w-0 flex-1">
+          <section className="min-h-[24rem] min-w-0 flex-1">
             <Canvas onOpenImportDialog={() => setImportOpen(true)} />
           </section>
-          <aside className="flex h-full w-80 flex-col border-l border-gray-800 bg-gray-900 p-4">
+          <aside
+            className={`vp-panel flex shrink-0 flex-col border-t border-white/10 p-4 transition-[width] duration-300 xl:h-full xl:border-t-0 xl:border-l ${
+              chatOpen ? 'w-full xl:w-[24rem] xl:min-w-[22rem]' : 'w-full xl:w-20 xl:min-w-20'
+            }`}
+          >
             <ChatPanel />
           </aside>
         </div>

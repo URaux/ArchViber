@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import {
+  Background,
+  BackgroundVariant,
   Controls,
   MiniMap,
   ReactFlow,
@@ -191,7 +193,7 @@ export function Canvas({ onOpenImportDialog }: CanvasProps) {
       : []
 
   return (
-    <div className="relative h-full w-full bg-gray-800">
+    <div className="relative h-full w-full overflow-hidden bg-slate-950">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -220,8 +222,14 @@ export function Canvas({ onOpenImportDialog }: CanvasProps) {
           setSelectedNodeId(selectedNodes[0]?.id ?? null)
         }}
         fitView
-        className="bg-gray-800"
+        className="vp-flow bg-[#08111f]"
       >
+        <Background
+          variant={BackgroundVariant.Dots}
+          gap={22}
+          size={1.2}
+          color="rgba(71, 85, 105, 0.45)"
+        />
         <svg className="absolute h-0 w-0" aria-hidden="true">
           <defs>
             <marker
@@ -251,11 +259,11 @@ export function Canvas({ onOpenImportDialog }: CanvasProps) {
         <MiniMap
           pannable
           zoomable
-          className="!bg-gray-900"
-          maskColor="rgba(17, 24, 39, 0.65)"
-          nodeColor="#4b5563"
+          className="!bg-slate-950/95"
+          maskColor="rgba(8, 17, 31, 0.68)"
+          nodeColor="#475569"
         />
-        <Controls className="!bg-gray-900 !text-gray-200" />
+        <Controls className="!bg-slate-950/95 !text-gray-200" />
       </ReactFlow>
       {contextMenu ? (
         <ContextMenu

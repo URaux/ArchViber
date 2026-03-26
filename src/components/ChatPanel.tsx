@@ -134,6 +134,8 @@ export function ChatPanel() {
   const edges = useAppStore((state) => state.edges)
   const projectName = useAppStore((state) => state.projectName)
   const selectedNodeId = useAppStore((state) => state.selectedNodeId)
+  const chatOpen = useAppStore((state) => state.chatOpen)
+  const setChatOpen = useAppStore((state) => state.setChatOpen)
   const addNode = useAppStore((state) => state.addNode)
   const addCanvasEdge = useAppStore((state) => state.addCanvasEdge)
   const removeNode = useAppStore((state) => state.removeNode)
@@ -334,95 +336,113 @@ export function ChatPanel() {
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="border-b border-gray-800 pb-3">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-300">AI Chat</h2>
+    <div className="flex h-full min-h-0 flex-col">
+      <button
+        type="button"
+        aria-expanded={chatOpen}
+        onClick={() => setChatOpen(!chatOpen)}
+        className={`flex items-center justify-between gap-3 rounded-2xl border border-white/10 px-4 py-3 text-left ${
+          chatOpen ? 'bg-white/5' : 'min-h-[4.5rem] xl:flex-1 xl:flex-col xl:justify-center'
+        }`}
+      >
+        <div className={`${chatOpen ? '' : 'xl:flex xl:flex-col xl:items-center xl:gap-2'}`}>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-200">AI Chat</h2>
+          {chatOpen ? (
             <p className="mt-1 text-xs text-gray-500">
               {selectedNode
                 ? `Node mode: ${selectedNode.data.name || selectedNode.id}`
                 : 'Global mode: discuss the whole canvas'}
             </p>
-          </div>
-          {selectedNode ? (
+          ) : (
+            <p className="mt-1 text-xs text-gray-500 xl:mt-0">Click to expand</p>
+          )}
+        </div>
+        <div className={`${chatOpen ? 'flex items-center gap-2' : 'xl:flex xl:flex-col xl:items-center'}`}>
+          {chatOpen && selectedNode ? (
             <span className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-200">
               {selectedNode.type}
             </span>
           ) : null}
+          <span className="rounded-full border border-white/10 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-gray-400">
+            {chatOpen ? 'Collapse' : 'Open'}
+          </span>
         </div>
-      </div>
+      </button>
 
-      <div className="flex-1 space-y-3 overflow-y-auto py-4">
-        {activeMessages.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-gray-700 bg-gray-800/50 p-4 text-sm text-gray-500">
-            Ask about architecture tradeoffs, implementation order, or request canvas changes.
-          </div>
-        ) : null}
-
-        {activeMessages.map((entry, messageIndex) => {
-          const actionBlocks = entry.role === 'assistant' ? extractActionBlocks(entry.content) : []
-
-          return (
-            <div
-              key={`${activeChatKey}-${messageIndex}`}
-              className={`rounded-2xl border px-4 py-3 text-sm ${
-                entry.role === 'user'
-                  ? 'ml-6 border-cyan-500/30 bg-cyan-500/10 text-cyan-50'
-                  : 'mr-6 border-gray-700 bg-gray-800/80 text-gray-100'
-              }`}
-            >
-              <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
-                {entry.role}
+      {chatOpen ? (
+        <>
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto py-4">
+            {activeMessages.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-gray-700 bg-gray-800/40 p-4 text-sm text-gray-500">
+                Ask about architecture tradeoffs, implementation order, or request canvas changes.
               </div>
-              <div className="whitespace-pre-wrap break-words">{entry.content || '...'}</div>
-              {actionBlocks.length > 0 ? (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {actionBlocks.map((rawAction, actionIndex) => {
-                    const actionKey = `${activeChatKey}-${messageIndex}-${actionIndex}`
+            ) : null}
 
-                    return (
-                      <div key={actionKey} className="space-y-2">
-                        <button
-                          type="button"
-                          onClick={() => applyCanvasAction(rawAction, actionKey)}
-                          className="rounded-full border border-emerald-500/50 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-100 transition hover:border-emerald-400 hover:bg-emerald-500/20"
-                        >
-                          [Apply to Canvas]
-                        </button>
-                        {actionErrors[actionKey] ? (
-                          <div className="text-xs text-rose-300">{actionErrors[actionKey]}</div>
-                        ) : null}
-                      </div>
-                    )
-                  })}
+            {activeMessages.map((entry, messageIndex) => {
+              const actionBlocks = entry.role === 'assistant' ? extractActionBlocks(entry.content) : []
+
+              return (
+                <div
+                  key={`${activeChatKey}-${messageIndex}`}
+                  className={`rounded-2xl border px-4 py-3 text-sm shadow-lg shadow-black/10 ${
+                    entry.role === 'user'
+                      ? 'ml-6 border-cyan-500/30 bg-cyan-500/10 text-cyan-50'
+                      : 'mr-6 border-gray-700 bg-gray-800/60 text-gray-100'
+                  }`}
+                >
+                  <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
+                    {entry.role}
+                  </div>
+                  <div className="whitespace-pre-wrap break-words">{entry.content || '...'}</div>
+                  {actionBlocks.length > 0 ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {actionBlocks.map((rawAction, actionIndex) => {
+                        const actionKey = `${activeChatKey}-${messageIndex}-${actionIndex}`
+
+                        return (
+                          <div key={actionKey} className="space-y-2">
+                            <button
+                              type="button"
+                              onClick={() => applyCanvasAction(rawAction, actionKey)}
+                              className="rounded-full border border-emerald-500/50 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-100 transition hover:border-emerald-400 hover:bg-emerald-500/20"
+                            >
+                              [Apply to Canvas]
+                            </button>
+                            {actionErrors[actionKey] ? (
+                              <div className="text-xs text-rose-300">{actionErrors[actionKey]}</div>
+                            ) : null}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : null}
                 </div>
-              ) : null}
-            </div>
-          )
-        })}
-      </div>
+              )
+            })}
+          </div>
 
-      <form onSubmit={handleSubmit} className="border-t border-gray-800 pt-4">
-        {error ? <div className="mb-3 text-sm text-rose-300">{error}</div> : null}
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={message}
-            onChange={(event) => setMessage(event.target.value)}
-            placeholder={selectedNode ? 'Ask about this node...' : 'Ask about the architecture...'}
-            className="flex-1 rounded-xl border border-gray-700 bg-gray-950 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-500"
-            disabled={isSending}
-          />
-          <button
-            type="submit"
-            disabled={isSending || !message.trim()}
-            className="rounded-xl border border-cyan-500/60 bg-cyan-500/10 px-4 py-3 text-sm font-medium text-cyan-100 transition hover:border-cyan-400 hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isSending ? 'Sending...' : 'Send'}
-          </button>
-        </div>
-      </form>
+          <form onSubmit={handleSubmit} className="border-t border-white/10 pt-4">
+            {error ? <div className="mb-3 text-sm text-rose-300">{error}</div> : null}
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={message}
+                onChange={(event) => setMessage(event.target.value)}
+                placeholder={selectedNode ? 'Ask about this node...' : 'Ask about the architecture...'}
+                className="flex-1 rounded-xl border border-gray-700 bg-gray-950 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-500"
+                disabled={isSending}
+              />
+              <button
+                type="submit"
+                disabled={isSending || !message.trim()}
+                className="rounded-xl border border-cyan-500/60 bg-cyan-500/10 px-4 py-3 text-sm font-medium text-cyan-100 transition hover:border-cyan-400 hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isSending ? 'Sending...' : 'Send'}
+              </button>
+            </div>
+          </form>
+        </>
+      ) : null}
     </div>
   )
 }
