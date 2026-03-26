@@ -1,9 +1,11 @@
 'use client'
 
+import { useState } from 'react'
 import { ReactFlowProvider } from '@xyflow/react'
 import { BuildButton } from '@/components/BuildButton'
 import { Canvas } from '@/components/Canvas'
 import { ChatPanel } from '@/components/ChatPanel'
+import { ImportDialog } from '@/components/ImportDialog'
 import { NodePalette } from '@/components/NodePalette'
 import { StatusBar } from '@/components/StatusBar'
 import { useAgentStatus } from '@/hooks/useAgentStatus'
@@ -12,6 +14,7 @@ import { useAppStore } from '@/lib/store'
 
 export default function Home() {
   const workDir = useAppStore((state) => state.config.workDir)
+  const [importOpen, setImportOpen] = useState(false)
 
   useAgentStatus()
   useAutoSave(workDir)
@@ -24,7 +27,16 @@ export default function Home() {
             <h1 className="text-sm font-semibold uppercase tracking-[0.3em] text-gray-100">Vibe Pencil</h1>
             <p className="text-xs text-gray-500">Topology-aware builds for architecture nodes</p>
           </div>
-          <BuildButton />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setImportOpen(true)}
+              className="rounded-full border border-gray-700 bg-gray-900 px-4 py-2 text-sm font-medium text-gray-100 transition hover:border-gray-500 hover:bg-gray-800"
+            >
+              Import Project
+            </button>
+            <BuildButton />
+          </div>
         </header>
         <div className="flex min-h-0 flex-1 overflow-hidden">
           <NodePalette />
@@ -35,6 +47,7 @@ export default function Home() {
             <ChatPanel />
           </aside>
         </div>
+        <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
         <StatusBar />
       </main>
     </ReactFlowProvider>

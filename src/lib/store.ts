@@ -26,6 +26,7 @@ interface AppState {
   onNodesChange: OnNodesChange<Node<ArchitectNodeData>>
   onEdgesChange: OnEdgesChange
   onConnect: OnConnect
+  setCanvas: (nodes: Node<ArchitectNodeData>[], edges: Edge[]) => void
   addNode: (node: Node<ArchitectNodeData>) => void
   addCanvasEdge: (edge: Edge) => void
   removeNode: (id: string) => void
@@ -53,6 +54,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   onNodesChange: (changes) => set({ nodes: applyNodeChanges(changes, get().nodes) }),
   onEdgesChange: (changes) => set({ edges: applyEdgeChanges(changes, get().edges) }),
   onConnect: (connection) => set({ edges: addEdge({ ...connection, type: 'sync' }, get().edges) }),
+  setCanvas: (nodes, edges) => set({ nodes, edges, selectedNodeId: null }),
   addNode: (node) => set({ nodes: [...get().nodes, node] }),
   addCanvasEdge: (edge) => set({ edges: addEdge(edge, get().edges) }),
   removeNode: (id) =>
