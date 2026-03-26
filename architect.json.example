@@ -1,0 +1,60 @@
+{
+  "name": "sample-user-platform",
+  "version": "1.0",
+  "canvas": {
+    "nodes": [
+      {
+        "id": "api-gateway",
+        "type": "service",
+        "position": { "x": 80, "y": 180 },
+        "data": {
+          "name": "API Gateway",
+          "description": "Routes external requests to internal services and handles auth checks.",
+          "status": "idle"
+        }
+      },
+      {
+        "id": "user-service",
+        "type": "service",
+        "position": { "x": 360, "y": 180 },
+        "data": {
+          "name": "UserService",
+          "description": "Owns user profiles, registration flows, and account business logic.",
+          "status": "idle"
+        }
+      },
+      {
+        "id": "user-db",
+        "type": "database",
+        "position": { "x": 640, "y": 180 },
+        "data": {
+          "name": "UserDB",
+          "description": "Primary persistence layer for user records and credentials.",
+          "status": "idle"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge-gateway-users",
+        "source": "api-gateway",
+        "target": "user-service",
+        "type": "sync",
+        "label": "REST"
+      },
+      {
+        "id": "edge-users-db",
+        "source": "user-service",
+        "target": "user-db",
+        "type": "sync",
+        "label": "read/write"
+      }
+    ]
+  },
+  "config": {
+    "agent": "claude-code",
+    "workDir": "./output",
+    "maxParallel": 3
+  },
+  "history": []
+}

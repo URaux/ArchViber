@@ -1,36 +1,44 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Vibe Pencil
 
-## Getting Started
+Visual architecture editor for mapping systems on a canvas, discussing them with AI, and triggering topology-aware builds.
 
-First, run the development server:
+## Features
+
+- Visual architecture editor built on React Flow
+- AI chat panel with node-scoped discussion
+- Auto-build workflows for the full graph, selected subgraphs, or a single node
+- Project import flow for turning an existing codebase into canvas nodes
+
+## Quick Start
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install && npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## How It Works
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Design the system on the canvas, select a node or the full architecture to discuss tradeoffs with AI, then trigger a build pass that uses the graph structure to scope implementation prompts.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Tech Stack
 
-## Learn More
+- Next.js 16
+- React 19
+- TypeScript
+- Tailwind CSS 4
+- `@xyflow/react`
+- Zustand
+- Vitest
 
-To learn more about Next.js, take a look at the following resources:
+## Configuration
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Project state is saved in `architect.json`. The main runtime settings are:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `config.agent`: agent backend to use for build execution (`claude-code` or `codex`)
+- `config.workDir`: working directory where generated code should be written
+- `config.maxParallel`: maximum parallel worker count recorded in project config
 
-## Deploy on Vercel
+See `architect.json.example` for a sample three-service architecture and the full saved project format.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## License
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+MIT
