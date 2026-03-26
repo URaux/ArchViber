@@ -16,6 +16,7 @@ interface ChatRequest {
   nodeContext?: string
   architecture_yaml: string
   backend?: AgentBackend
+  model?: string
 }
 
 const CANVAS_ACTION_INSTRUCTIONS = [
@@ -37,11 +38,11 @@ function formatHistory(history: ChatMessage[] | undefined) {
 }
 
 function getBackend(backend?: AgentBackend): AgentBackend {
-  if (backend === 'codex' || backend === 'claude-code') {
+  if (backend === 'codex' || backend === 'claude-code' || backend === 'gemini') {
     return backend
   }
 
-  return process.env.VIBE_CHAT_AGENT_BACKEND === 'codex' ? 'codex' : 'claude-code'
+  return (process.env.VIBE_CHAT_AGENT_BACKEND as AgentBackend) ?? 'claude-code'
 }
 
 function buildPrompt({ message, history, nodeContext, architecture_yaml }: ChatRequest) {
@@ -80,7 +81,8 @@ export async function POST(request: Request) {
     'chat',
     buildPrompt(payload),
     getBackend(payload.backend),
-    process.cwd()
+    process.cwd(),
+    payload.model
   )
 
   let cleanup = () => undefined
