@@ -24,83 +24,17 @@
 
 ## 系统架构
 
-```mermaid
-graph TB
-    subgraph Frontend["前端 (Next.js 16 + React Flow)"]
-        Canvas["画布<br/>Container + Block 两层架构"]
-        Chat["聊天面板<br/>AI 对话 + Apply to Canvas"]
-        Sidebar["会话列表<br/>Claude.ai 风格"]
-    end
-
-    subgraph Backend["后端 (Node.js API Routes)"]
-        AgentRunner["AgentRunner<br/>子进程管理 + SSE 流式输出"]
-        SchemaEngine["SchemaEngine<br/>画布 ↔ YAML 双向序列化"]
-        TopoSort["拓扑排序<br/>Kahn 算法 → 波次调度"]
-    end
-
-    subgraph Agents["AI CLI 后端"]
-        CC["Claude Code<br/>stdin pipe + stream-json"]
-        Codex["Codex<br/>exec --full-auto"]
-        Gemini["Gemini CLI<br/>-p prompt"]
-    end
-
-    Canvas --> SchemaEngine
-    Chat --> AgentRunner
-    SchemaEngine --> AgentRunner
-    AgentRunner --> TopoSort
-    TopoSort --> AgentRunner
-    AgentRunner --> CC
-    AgentRunner --> Codex
-    AgentRunner --> Gemini
-    AgentRunner -->|SSE| Canvas
-```
+![系统架构](docs/arch-system.png)
 
 ## 构建流程
 
-```mermaid
-sequenceDiagram
-    participant U as 用户
-    participant C as 画布
-    participant S as SchemaEngine
-    participant T as 拓扑排序
-    participant A as AgentRunner
-    participant AI as AI CLI
-
-    U->>C: 点击 Build All
-    C->>S: nodes + edges
-    S->>S: 序列化为 YAML
-    C->>T: 节点 + 边
-    T->>T: Kahn 算法
-    T->>A: Wave 0: [节点A, 节点B]
-    par 并行执行
-        A->>AI: spawn 节点A
-        A->>AI: spawn 节点B
-    end
-    AI-->>A: SSE 输出流
-    A-->>C: 实时状态更新
-    T->>A: Wave 1: [节点C]
-    A->>AI: spawn 节点C
-    AI-->>A: 完成
-    A-->>U: 构建完成
-```
+![构建流程](docs/arch-build-flow.png)
 
 ---
 
 ## 画布模型
 
-```mermaid
-graph LR
-    subgraph Container1["容器: Agent Core (紫色)"]
-        B1["模块: LangGraph Agent"]
-        B2["模块: MCP Runtime"]
-    end
-    subgraph Container2["容器: MCP Servers (绿色)"]
-        B3["模块: docs-rag"]
-        B4["模块: web-search"]
-    end
-    B2 -->|MCP stdio| B3
-    B2 -->|MCP stdio| B4
-```
+![画布模型](docs/arch-canvas-model.png)
 
 **两层架构**：
 - **Container（容器）** — 分组容器，可折叠，6 种颜色标签
