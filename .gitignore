@@ -42,3 +42,6 @@ next-env.d.ts
 /output/
 /workspace/
 .planning/
+design/
+_pf_parts/
+promptfolio_payload.json
