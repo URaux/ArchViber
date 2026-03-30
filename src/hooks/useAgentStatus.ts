@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react'
 import { useAppStore } from '@/lib/store'
-import type { BuildStatus } from '@/lib/types'
+import type { BuildStatus, BuildSummary, BuildAttempt } from '@/lib/types'
 import { getDownstreamDependents } from '@/lib/topo-sort'
 
 interface StatusMessage {
@@ -22,7 +22,13 @@ interface WaveMessage {
   wave: number
 }
 
-type AgentStreamMessage = StatusMessage | OutputMessage | WaveMessage
+interface BuildSummaryMessage {
+  type: 'build-summary'
+  nodeId: string
+  summary: BuildSummary
+}
+
+type AgentStreamMessage = StatusMessage | OutputMessage | WaveMessage | BuildSummaryMessage
 
 function getLatestLine(text: string) {
   return text
@@ -117,6 +123,42 @@ export function useAgentStatus() {
 
       if (payload.type === 'wave') {
         store.setBuildState({ active: true, currentWave: payload.wave + 1 })
+        return
+      }
+
+      if (payload.type === 'build-summary') {
+        const { summary, nodeId } = payload
+        const state = useAppStore.getState()
+        const node = state.nodes.find((n) => n.id === nodeId)
+        if (!node || node.type !== 'block') return
+
+        const nodeData = node.data as import('@/lib/types').BlockNodeData
+        const previousSummary = nodeData.buildSummary
+        const existingHistory: BuildAttempt[] = nodeData.buildHistory ?? []
+
+        let nextHistory = existingHistory
+
+        // Rotate previous buildSummary into history before replacing
+        if (previousSummary) {
+          const deps = previousSummary.dependencies.slice(0, 3).join(', ')
+          const attemptDigest = `Built successfully. ${previousSummary.filesCreated.length} files${deps ? `, deps: ${deps}` : ''}.`
+          const attempt: BuildAttempt = {
+            builtAt: previousSummary.builtAt,
+            status: 'done',
+            durationMs: previousSummary.durationMs,
+            backend: previousSummary.backend,
+            model: previousSummary.model,
+            summaryDigest: attemptDigest,
+            filesCreated: previousSummary.filesCreated,
+          }
+          nextHistory = [...existingHistory, attempt].slice(-5)
+        }
+
+        store.updateNodeData(nodeId, {
+          buildSummary: summary,
+          buildHistory: nextHistory,
+        })
+        return
       }
     }
 

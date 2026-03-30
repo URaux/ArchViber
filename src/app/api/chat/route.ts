@@ -16,10 +16,11 @@ interface ChatRequest {
   message: string
   history?: ChatMessage[]
   nodeContext?: string
+  codeContext?: string
   architecture_yaml: string
   backend?: AgentBackend
   model?: string
-  locale?: Locale // NEW
+  locale?: Locale
 }
 
 function formatHistory(history: ChatMessage[] | undefined) {
@@ -40,13 +41,13 @@ function getBackend(backend?: AgentBackend): AgentBackend {
   return (process.env.VIBE_CHAT_AGENT_BACKEND as AgentBackend) ?? 'claude-code'
 }
 
-function buildPrompt({ message, history, nodeContext, architecture_yaml, locale }: ChatRequest) {
+function buildPrompt({ message, history, nodeContext, codeContext, architecture_yaml, locale }: ChatRequest) {
   const systemContext = buildSystemContext({
     locale: locale ?? 'en',
     role: 'chat',
   })
 
-  return [
+  const parts = [
     systemContext,
     '',
     'Architecture YAML:',
@@ -54,13 +55,24 @@ function buildPrompt({ message, history, nodeContext, architecture_yaml, locale 
     '',
     'Selected node context:',
     nodeContext ?? 'Global chat mode. No node is selected.',
+  ]
+
+  if (codeContext) {
+    parts.push('')
+    parts.push('Code context (files from the built node):')
+    parts.push(codeContext)
+  }
+
+  parts.push(
     '',
     'Conversation so far:',
     formatHistory(history),
     '',
     'Latest user message:',
-    message,
-  ].join('\n')
+    message
+  )
+
+  return parts.join('\n')
 }
 
 function stripAnsi(text: string): string {

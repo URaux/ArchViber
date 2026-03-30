@@ -10,6 +10,33 @@ export interface ContainerNodeData extends Record<string, unknown> {
   collapsed: boolean
 }
 
+export interface BuildSummary {
+  builtAt: number
+  durationMs: number
+  backend: AgentBackendType
+  model?: string
+  filesCreated: string[]
+  filesModified: string[]
+  entryPoint?: string
+  dependencies: string[]
+  techDecisions: string[]
+  warnings: string[]
+  errors: string[]
+  outputTokenEstimate: number
+  truncatedOutput?: string
+}
+
+export interface BuildAttempt {
+  builtAt: number
+  status: 'done' | 'error'
+  durationMs: number
+  backend: AgentBackendType
+  model?: string
+  summaryDigest: string
+  errorDigest?: string
+  filesCreated?: string[]
+}
+
 export interface BlockNodeData extends Record<string, unknown> {
   name: string
   description: string
@@ -17,6 +44,8 @@ export interface BlockNodeData extends Record<string, unknown> {
   summary?: string
   errorMessage?: string
   techStack?: string
+  buildSummary?: BuildSummary
+  buildHistory?: BuildAttempt[]
 }
 
 export interface ArchitectEdge {

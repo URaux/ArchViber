@@ -1,5 +1,6 @@
 import type { AgentStatus } from '@/lib/agent-runner'
 import { agentRunner } from '@/lib/agent-runner-instance'
+import { extractBuildSummary } from '@/lib/build-summarizer'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -18,6 +19,12 @@ interface OutputEventPayload {
 
 interface WaveEventPayload {
   wave: number
+}
+
+interface DoneEventPayload {
+  agentId: string
+  nodeId: string
+  output: string
 }
 
 function toBuildStatus(status: AgentStatus) {
@@ -65,15 +72,55 @@ export async function GET(request: Request) {
         push({ type: 'wave', wave })
       }
 
+      // Track build start times per nodeId to compute duration
+      const buildStartedAt: Record<string, number> = {}
+
+      const handleBuildStatus = ({ nodeId, status }: StatusEventPayload) => {
+        if (status === 'running') {
+          buildStartedAt[nodeId] = Date.now()
+        }
+      }
+
+      const handleDone = ({ agentId, nodeId, output }: DoneEventPayload) => {
+        // Skip chat agents — they have nodeId 'chat'
+        if (nodeId === 'chat') return
+
+        const info = agentRunner.getStatus(agentId)
+        if (!info) return
+
+        const finishedAt = Date.now()
+        const startedAt = buildStartedAt[nodeId] ?? finishedAt
+
+        extractBuildSummary(
+          info.workDir,
+          output,
+          nodeId,
+          info.backend,
+          undefined,
+          startedAt,
+          finishedAt
+        )
+          .then((summary) => {
+            push({ type: 'build-summary', nodeId, summary })
+          })
+          .catch(() => {
+            // Best-effort: if extraction fails, skip
+          })
+      }
+
       cleanup = () => {
         agentRunner.off('status', handleStatus)
+        agentRunner.off('status', handleBuildStatus)
         agentRunner.off('output', handleOutput)
         agentRunner.off('wave', handleWave)
+        agentRunner.off('done', handleDone)
       }
 
       agentRunner.on('status', handleStatus)
+      agentRunner.on('status', handleBuildStatus)
       agentRunner.on('output', handleOutput)
       agentRunner.on('wave', handleWave)
+      agentRunner.on('done', handleDone)
       request.signal.addEventListener('abort', close, { once: true })
     },
     cancel() {

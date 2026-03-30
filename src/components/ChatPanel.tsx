@@ -169,7 +169,7 @@ function buildNodeContext(
           .join('\n')
       : '- No connected edges.'
 
-  return [
+  const sections: string[] = [
     `Node id: ${selectedNode.id}`,
     `Node type: ${selectedNode.type}`,
     `Node name: ${selectedNode.data.name || selectedNode.id}`,
@@ -178,7 +178,62 @@ function buildNodeContext(
     `Tech stack: ${selectedNode.data.techStack || 'Not specified.'}`,
     'Connected edges:',
     edgeSummary,
-  ].join('\n')
+  ]
+
+  const blockData = selectedNode.data as BlockNodeData
+
+  // Inject build summary if available
+  const bs = blockData.buildSummary
+  if (bs) {
+    sections.push('')
+    sections.push('## Build Results (from last build)')
+    sections.push(`Built at: ${new Date(bs.builtAt).toISOString()}`)
+    sections.push(`Duration: ${(bs.durationMs / 1000).toFixed(1)}s`)
+    sections.push(`Backend: ${bs.backend}${bs.model ? ` (${bs.model})` : ''}`)
+    if (bs.filesCreated.length > 0) {
+      sections.push(`Files created: ${bs.filesCreated.join(', ')}`)
+    }
+    if (bs.entryPoint) {
+      sections.push(`Entry point: ${bs.entryPoint}`)
+    }
+    if (bs.dependencies.length > 0) {
+      sections.push(`Dependencies: ${bs.dependencies.join(', ')}`)
+    }
+    if (bs.techDecisions.length > 0) {
+      sections.push('Key decisions:')
+      for (const d of bs.techDecisions) sections.push(`- ${d}`)
+    }
+    if (bs.warnings.length > 0) {
+      sections.push('Warnings:')
+      for (const w of bs.warnings) sections.push(`- ${w}`)
+    }
+  }
+
+  // Inject build history if available
+  const history = blockData.buildHistory
+  if (history && history.length > 0) {
+    sections.push('')
+    sections.push('## Build History')
+    history.forEach((attempt, i) => {
+      const time = new Date(attempt.builtAt).toISOString()
+      const statusLabel = attempt.status === 'done' ? 'SUCCESS' : 'FAILED'
+      sections.push(
+        `${i + 1}. [${statusLabel}] ${time} (${(attempt.durationMs / 1000).toFixed(0)}s) — ${attempt.summaryDigest}`
+      )
+      if (attempt.errorDigest) {
+        sections.push(`   Error: ${attempt.errorDigest}`)
+      }
+    })
+  }
+
+  // Inject error context if build failed
+  if (blockData.status === 'error' && blockData.errorMessage) {
+    sections.push('')
+    sections.push('## Build Error')
+    sections.push(blockData.errorMessage)
+  }
+
+  return sections.join('\n')
 }
 
 function parseStreamEvents(buffer: string) {
@@ -228,6 +283,7 @@ export function ChatPanel() {
   const activeChatSessionId = useAppStore((state) => state.activeChatSessionId)
   const createChatSession = useAppStore((state) => state.createChatSession)
   const updateActiveChatMessages = useAppStore((state) => state.updateActiveChatMessages)
+  const workDir = useAppStore((state) => state.config.workDir)
   const [message, setMessage] = useState('')
   const [isSending, setIsSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -237,6 +293,8 @@ export function ChatPanel() {
     edges: Edge[]
   } | null>(null)
   const [lastAppliedActionKey, setLastAppliedActionKey] = useState<string | null>(null)
+  const [codeContext, setCodeContext] = useState<string | null>(null)
+  const [isLoadingCode, setIsLoadingCode] = useState(false)
 
   const activeSession = chatSessions.find((s) => s.id === activeChatSessionId)
   const activeMessages = activeSession?.messages ?? []
@@ -262,6 +320,44 @@ export function ChatPanel() {
     () => buildNodeContext(selectedNodeId, nodes, edges),
     [edges, nodes, selectedNodeId]
   )
+
+  // Clear code context when selected node changes
+  const prevSelectedNodeRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (selectedNodeId !== prevSelectedNodeRef.current) {
+      prevSelectedNodeRef.current = selectedNodeId
+      setCodeContext(null)
+    }
+  }, [selectedNodeId])
+
+  const selectedBlockData = selectedNode?.type === 'block'
+    ? (selectedNode.data as BlockNodeData)
+    : null
+  const hasBuildSummary = Boolean(selectedBlockData?.buildSummary?.filesCreated?.length)
+
+  async function handleLoadCodeContext() {
+    if (!selectedBlockData?.buildSummary || !hasBuildSummary) return
+    setIsLoadingCode(true)
+    try {
+      const res = await fetch('/api/build/read-files', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workDir,
+          files: selectedBlockData.buildSummary.filesCreated,
+          maxTokens: 4000,
+        }),
+      })
+      if (res.ok) {
+        const data = (await res.json()) as { content: string }
+        setCodeContext(data.content || null)
+      }
+    } catch {
+      // best-effort
+    } finally {
+      setIsLoadingCode(false)
+    }
+  }
 
   function updateAssistantMessage(content: string, actions?: string[]) {
     updateActiveChatMessages((current) => {
@@ -550,6 +646,7 @@ export function ChatPanel() {
           message: trimmedMessage,
           history: nextHistory,
           nodeContext,
+          codeContext: codeContext ?? undefined,
           architecture_yaml: canvasToYaml(nodes, edges, projectName),
           backend,
           model,
@@ -778,6 +875,35 @@ export function ChatPanel() {
 
           <form onSubmit={handleSubmit} className="border-t border-slate-200 pt-4">
             {error ? <div className="mb-3 max-h-20 overflow-y-auto text-sm text-rose-600">{error}</div> : null}
+            {hasBuildSummary ? (
+              <div className="mb-3 flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={isLoadingCode || isSending}
+                  onClick={() => { void handleLoadCodeContext() }}
+                  className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                    codeContext
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                      : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300 hover:bg-slate-100'
+                  }`}
+                >
+                  {isLoadingCode
+                    ? (locale === 'zh' ? '读取中...' : 'Loading...')
+                    : codeContext
+                      ? (locale === 'zh' ? '✓ 代码已加载' : '✓ Code loaded')
+                      : (locale === 'zh' ? '加载代码上下文' : 'Load code context')}
+                </button>
+                {codeContext ? (
+                  <button
+                    type="button"
+                    onClick={() => setCodeContext(null)}
+                    className="text-[10px] text-slate-400 hover:text-slate-600"
+                  >
+                    {locale === 'zh' ? '清除' : 'Clear'}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
             <div className="flex gap-2">
               <input
                 type="text"
