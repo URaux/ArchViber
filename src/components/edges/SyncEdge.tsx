@@ -1,12 +1,12 @@
 import {
   BaseEdge,
   EdgeLabelRenderer,
-  getBezierPath,
+  getSmoothStepPath,
   type EdgeProps,
 } from '@xyflow/react'
 
 export function SyncEdge(props: EdgeProps) {
-  const [edgePath, labelX, labelY] = getBezierPath(props)
+  const [edgePath, labelX, labelY] = getSmoothStepPath({ ...props, borderRadius: 10 })
 
   return (
     <>
