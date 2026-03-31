@@ -147,6 +147,11 @@ export const translations = {
     retry_failed: '重试失败节点',
     confirm_design: '确认方案，开始生成架构',
     brainstorm_hint: '当前为需求讨论阶段，确认后开始生成架构',
+    custom_api: '自定义 API',
+    api_base_url: 'API 地址',
+    api_key: 'API 密钥',
+    api_model: '模型名称',
+    custom_api_chat_only: '自定义 API 目前仅支持对话，构建需要 CLI 后端（Claude Code / Codex / Gemini）。',
   },
   en: {
     nodes: 'Nodes',
@@ -294,6 +299,11 @@ export const translations = {
     retry_failed: 'Retry Failed Nodes',
     confirm_design: 'Confirm design, generate architecture',
     brainstorm_hint: 'Brainstorming phase — confirm to start generating architecture',
+    custom_api: 'Custom API',
+    api_base_url: 'API Base URL',
+    api_key: 'API Key',
+    api_model: 'Model Name',
+    custom_api_chat_only: 'Custom API supports chat only. Build requires a CLI backend (Claude Code / Codex / Gemini).',
   },
 } satisfies Record<Locale, Record<string, string>>
 

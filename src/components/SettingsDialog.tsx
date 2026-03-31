@@ -10,12 +10,14 @@ const BACKEND_OPTIONS: { value: AgentBackendType; label: string }[] = [
   { value: 'claude-code', label: 'Claude Code' },
   { value: 'codex', label: 'Codex' },
   { value: 'gemini', label: 'Gemini' },
+  { value: 'custom-api', label: 'Custom API' },
 ]
 
 const DEFAULT_MODELS: Record<AgentBackendType, string> = {
   'claude-code': 'claude-sonnet-4-6',
   codex: 'gpt-5.4',
   gemini: 'gemini-3-flash-preview',
+  'custom-api': 'deepseek-chat',
 }
 
 interface SkillEntry {
@@ -248,6 +250,9 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const [models, setModels] = useState<string[]>([])
   const [loadingModels, setLoadingModels] = useState(false)
   const [activeTab, setActiveTab] = useState<SettingsTab>('general')
+  const [customApiBase, setCustomApiBase] = useState(config.customApiBase ?? '')
+  const [customApiKey, setCustomApiKey] = useState(config.customApiKey ?? '')
+  const [customApiModel, setCustomApiModel] = useState(config.customApiModel ?? '')
 
   const fetchModels = useCallback(async (backend: AgentBackendType) => {
     setLoadingModels(true)
@@ -275,13 +280,20 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
     setMaxParallel(String(config.maxParallel))
     setDraftLocale(locale)
     setActiveTab('general')
+    setCustomApiBase(config.customApiBase ?? '')
+    setCustomApiKey(config.customApiKey ?? '')
+    setCustomApiModel(config.customApiModel ?? '')
     void fetchModels(config.agent)
-  }, [config.agent, config.model, config.maxParallel, config.workDir, locale, open, fetchModels])
+  }, [config.agent, config.model, config.maxParallel, config.workDir, config.customApiBase, config.customApiKey, config.customApiModel, locale, open, fetchModels])
 
   function handleBackendChange(backend: AgentBackendType) {
     setAgent(backend)
     setModel(DEFAULT_MODELS[backend])
-    void fetchModels(backend)
+    if (backend !== 'custom-api') {
+      void fetchModels(backend)
+    } else {
+      setModels([])
+    }
   }
 
   function handleSave(event: React.FormEvent<HTMLFormElement>) {
@@ -299,6 +311,9 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
       model,
       workDir: trimmedWorkDir,
       maxParallel: clampMaxParallel(Number(maxParallel)),
+      customApiBase: customApiBase.trim() || undefined,
+      customApiKey: customApiKey.trim() || undefined,
+      customApiModel: customApiModel.trim() || undefined,
     })
     onClose()
   }
@@ -378,7 +393,50 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
               ))}
             </fieldset>
 
-            <label className="block">
+            {agent === 'custom-api' && (
+              <div className="space-y-3 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+                <p className="text-[11px] text-blue-600">{t('custom_api_chat_only')}</p>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                    {t('api_base_url')}
+                  </span>
+                  <input
+                    type="text"
+                    value={customApiBase}
+                    onChange={(e) => setCustomApiBase(e.target.value)}
+                    placeholder="https://api.deepseek.com/v1"
+                    className="vp-input rounded-2xl px-4 py-3 text-sm"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                    {t('api_key')}
+                  </span>
+                  <input
+                    type="password"
+                    value={customApiKey}
+                    onChange={(e) => setCustomApiKey(e.target.value)}
+                    placeholder="sk-..."
+                    className="vp-input rounded-2xl px-4 py-3 text-sm"
+                    autoComplete="off"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                    {t('api_model')}
+                  </span>
+                  <input
+                    type="text"
+                    value={customApiModel}
+                    onChange={(e) => setCustomApiModel(e.target.value)}
+                    placeholder="deepseek-chat"
+                    className="vp-input rounded-2xl px-4 py-3 text-sm"
+                  />
+                </label>
+              </div>
+            )}
+
+            {agent !== 'custom-api' && <label className="block">
               <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
                 {t('model')}
                 {loadingModels && (

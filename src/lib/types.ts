@@ -54,13 +54,16 @@ export interface ArchitectEdge {
 }
 export type CanvasNodeData = ContainerNodeData | BlockNodeData
 
-export type AgentBackendType = 'claude-code' | 'codex' | 'gemini'
+export type AgentBackendType = 'claude-code' | 'codex' | 'gemini' | 'custom-api'
 
 export interface ProjectConfig {
   agent: AgentBackendType
   model: string
   workDir: string
   maxParallel: number
+  customApiBase?: string
+  customApiKey?: string
+  customApiModel?: string
 }
 
 export interface HistoryEntry {

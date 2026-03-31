@@ -464,35 +464,40 @@ export function ChatPanel() {
           useAppStore.getState().setSessionPhase(sessionId, 'iterate')
         }
       }
-      // Auto-generate session title + project name via lightweight title endpoint
+      // Auto-generate session title + project name from AI response (no extra API call)
       const sid = sessionId
       const existingTitle = useAppStore.getState().chatSessions.find((s) => s.id === sid)?.title
       if (!existingTitle) {
         const visibleText = extractVisibleChatText(fullAssistantText)
         if (visibleText.trim()) {
-          fetch('/api/chat/title', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              userMessage: trimmedMessage,
-              assistantMessage: visibleText.slice(0, 300),
-              locale,
-              backend,
-              model,
-            }),
-          }).then(async (res) => {
-            if (!res.ok) return
-            const data = (await res.json()) as { title?: string }
-            if (data.title) {
-              useAppStore.getState().renameChatSession(sid, data.title)
-              // Also set project name if still default
-              const store = useAppStore.getState()
-              const untitled = t('untitled')
-              if (store.projectName === untitled) {
-                store.setProjectName(data.title)
-              }
+          // Extract title from response: first heading, first bold text, or first sentence
+          let autoTitle = ''
+          const headingMatch = visibleText.match(/^#+\s+(.+)/m)
+          const boldMatch = visibleText.match(/\*\*(.+?)\*\*/)
+          const firstLine = visibleText.split('\n').find((l) => l.trim() && !l.startsWith('#') && !l.startsWith('-'))?.trim()
+
+          if (headingMatch) {
+            autoTitle = headingMatch[1].trim()
+          } else if (boldMatch) {
+            autoTitle = boldMatch[1].trim()
+          } else if (firstLine) {
+            autoTitle = firstLine.slice(0, 30)
+          }
+
+          // Fallback to user message
+          if (!autoTitle) autoTitle = trimmedMessage.slice(0, 25)
+
+          // Clean up
+          autoTitle = autoTitle.replace(/[*#`]/g, '').trim().slice(0, 20)
+
+          if (autoTitle) {
+            useAppStore.getState().renameChatSession(sid, autoTitle)
+            const store = useAppStore.getState()
+            const untitled = t('untitled')
+            if (store.projectName === untitled) {
+              store.setProjectName(autoTitle)
             }
-          }).catch(() => { /* title generation is best-effort */ })
+          }
         }
       }
     } catch (sendError) {
