@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { toPng } from 'html-to-image'
+import { getNodesBounds, getViewportForBounds, useReactFlow } from '@xyflow/react'
 import { canvasToMermaid, canvasToYaml, exportProjectJson } from '@/lib/schema-engine'
 import { useAppStore } from '@/lib/store'
 import { t } from '@/lib/i18n'
@@ -49,6 +50,7 @@ export function ExportMenu() {
   const [open, setOpen] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const ref = useRef<HTMLDivElement>(null)
+  const { getNodes } = useReactFlow()
   // Subscribe to locale changes so i18n keys re-render
   useAppStore((state) => state.locale)
 
@@ -90,44 +92,30 @@ export function ExportMenu() {
   async function handleExportPng() {
     close()
     const state = useAppStore.getState()
+    const nodes = getNodes()
+    if (nodes.length === 0) return
 
-    // Target just the viewport (nodes + edges), not controls/minimap
     const viewport = document.querySelector('.react-flow__viewport') as HTMLElement | null
     if (!viewport) return
 
-    // Hide UI overlays temporarily
-    const controls = document.querySelector('.react-flow__controls') as HTMLElement | null
-    const minimap = document.querySelector('.react-flow__minimap') as HTMLElement | null
-    const attribution = document.querySelector('.react-flow__attribution') as HTMLElement | null
-    if (controls) controls.style.display = 'none'
-    if (minimap) minimap.style.display = 'none'
-    if (attribution) attribution.style.display = 'none'
-
     try {
-      // Get bounding rect of all nodes for proper sizing
-      const nodeEls = viewport.querySelectorAll('.react-flow__node')
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-      nodeEls.forEach((el) => {
-        const r = el.getBoundingClientRect()
-        const vr = viewport.getBoundingClientRect()
-        const x = r.left - vr.left
-        const y = r.top - vr.top
-        minX = Math.min(minX, x)
-        minY = Math.min(minY, y)
-        maxX = Math.max(maxX, x + r.width)
-        maxY = Math.max(maxY, y + r.height)
-      })
+      // Use React Flow's coordinate system to compute full bounds
+      const padding = 80
+      const bounds = getNodesBounds(nodes)
+      const imageWidth = bounds.width + padding * 2
+      const imageHeight = bounds.height + padding * 2
 
-      const padding = 60
-      const width = maxX - minX + padding * 2
-      const height = maxY - minY + padding * 2
+      // Calculate viewport transform to show all nodes
+      const vp = getViewportForBounds(bounds, imageWidth, imageHeight, 0.5, 2, padding)
 
       const dataUrl = await toPng(viewport, {
         backgroundColor: '#ffffff',
-        width: Math.max(width, 400),
-        height: Math.max(height, 300),
+        width: imageWidth,
+        height: imageHeight,
         style: {
-          transform: `translate(${-minX + padding}px, ${-minY + padding}px)`,
+          width: `${imageWidth}px`,
+          height: `${imageHeight}px`,
+          transform: `translate(${vp.x}px, ${vp.y}px) scale(${vp.zoom})`,
         },
       })
 
@@ -137,11 +125,6 @@ export function ExportMenu() {
       a.click()
     } catch {
       // Silent fail — canvas may be empty
-    } finally {
-      // Restore UI overlays
-      if (controls) controls.style.display = ''
-      if (minimap) minimap.style.display = ''
-      if (attribution) attribution.style.display = ''
     }
   }
 
