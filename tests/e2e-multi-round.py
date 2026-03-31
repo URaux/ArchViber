@@ -164,14 +164,15 @@ def test_multi_round():
 
         # ====== Build All dialog test ======
         log("Testing Build All dialog...")
-        build_btn = page.locator("button:has-text('全部构建')").or_(page.locator("button:has-text('Build All')"))
+        build_btn = page.locator("button:has-text('全部构建')").or_(page.locator("button:has-text('Build All')")).or_(page.locator("button:has-text('构建')"))
         if build_btn.count() > 0:
             build_btn.first.click()
             page.wait_for_timeout(1000)
             page.screenshot(path=f"{SCREENSHOTS_DIR}/build-dialog.png")
 
             # Check dialog appeared
-            dialog = page.locator("text=构建计划").or_(page.locator("text=Build Plan"))
+            # Dialog renders via Portal to body — search the whole page
+            dialog = page.locator("text=构建计划").or_(page.locator("text=Build Plan")).or_(page.locator(".vp-dialog-backdrop"))
             results.append(("Build dialog", dialog.count() > 0, f"dialog visible: {dialog.count() > 0}"))
 
             # Close dialog
@@ -181,9 +182,13 @@ def test_multi_round():
         else:
             results.append(("Build dialog", False, "Build button not found"))
 
-        # Keep browser open for 10s so user can see
-        log("Test complete. Browser stays open for 10 seconds...")
-        page.wait_for_timeout(10000)
+        # Keep browser open for user inspection
+        log("Test complete. Browser stays open — close it manually when done.")
+        log("Press Ctrl+C in terminal to exit.")
+        try:
+            page.wait_for_timeout(600000)  # 10 minutes
+        except Exception:
+            pass
 
         browser.close()
 

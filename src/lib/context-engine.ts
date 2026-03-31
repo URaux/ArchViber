@@ -216,8 +216,13 @@ const CANVAS_ACTION_INSTRUCTIONS = [
   '- update-node: {"action":"update-node","target_id":"node-id","data":{"name":"...","description":"...","techStack":"...","color":"green","collapsed":true}}',
   '- remove-node: {"action":"remove-node","target_id":"node-id"}',
   '- add-edge: {"action":"add-edge","edge":{"id?":"edge-1","source":"block-web","target":"block-api","type":"sync","label?":"HTTPS"}}',
-  'Only create edges between block nodes.',
-  'Keep normal prose AFTER the code block, and keep code blocks valid JSON.',
+  '',
+  'CRITICAL RULES:',
+  '- You MUST include add-edge actions to connect related blocks. An architecture without edges is incomplete.',
+  '- Every block that depends on or communicates with another block MUST have an edge between them.',
+  '- Use descriptive edge labels (e.g., "HTTPS", "SQL", "gRPC", "WebSocket").',
+  '- Only create edges between block nodes (not containers).',
+  '- Keep normal prose AFTER the code block, and keep code blocks valid JSON.',
 ].join('\n')
 
 function layerOutputFormat(agentType: AgentType, task: TaskType, locale: Locale): string {

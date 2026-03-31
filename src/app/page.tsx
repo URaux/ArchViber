@@ -57,7 +57,7 @@ export default function Home() {
 
   return (
     <ReactFlowProvider>
-      <main className="flex h-screen w-screen flex-col overflow-hidden bg-transparent text-slate-800">
+      <main className="flex h-dvh w-dvw flex-col overflow-hidden bg-transparent text-slate-800">
         <header className="vp-panel relative z-50 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/80 px-5 py-3">
           <div>
             <h1 className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-900">Vibe Pencil</h1>
