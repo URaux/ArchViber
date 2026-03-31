@@ -1,6 +1,8 @@
+import { exec } from 'child_process'
 import type { AgentStatus } from '@/lib/agent-runner'
 import { agentRunner } from '@/lib/agent-runner-instance'
 import { extractBuildSummary } from '@/lib/build-summarizer'
+import { resolveHooks } from '@/lib/skill-loader'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -102,6 +104,23 @@ export async function GET(request: Request) {
         )
           .then((summary) => {
             push({ type: 'build-summary', nodeId, summary })
+
+            // Execute post-build hooks (best-effort, non-blocking)
+            const hooks = resolveHooks('build', 'node', undefined, 'post-build')
+            for (const hook of hooks) {
+              if (!hook.metadata.command) continue
+              const cmd = hook.metadata.command.replace('{workDir}', info.workDir)
+              exec(cmd, { cwd: info.workDir }, (error, stdout, stderr) => {
+                push({
+                  type: 'hook-result',
+                  nodeId,
+                  hook: hook.metadata.name,
+                  exitCode: error?.code ?? 0,
+                  stdout: stdout.slice(0, 2000),
+                  stderr: stderr.slice(0, 500),
+                })
+              })
+            }
           })
           .catch(() => {
             // Best-effort: if extraction fails, skip

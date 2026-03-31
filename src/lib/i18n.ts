@@ -144,6 +144,7 @@ export const translations = {
     import_hint: '支持 .md 文件、文件夹批量导入、GitHub 链接',
     importing_skill: '导入中...',
     import_success: '导入成功',
+    retry_failed: '重试失败节点',
   },
   en: {
     nodes: 'Nodes',
@@ -288,6 +289,7 @@ export const translations = {
     import_hint: 'Supports .md files, folder batch import, GitHub links',
     importing_skill: 'Importing...',
     import_success: 'Import successful',
+    retry_failed: 'Retry Failed Nodes',
   },
 } satisfies Record<Locale, Record<string, string>>
 

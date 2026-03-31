@@ -15,6 +15,12 @@ export interface SkillMetadata {
   tags: string[]
   scope: Array<'global' | 'node' | 'build'>
   priority: number
+  /** Skill type: 'prompt' injects content into agent context; 'hook' runs a shell command. */
+  type: 'prompt' | 'hook'
+  /** When the hook should fire (hook-type skills only). */
+  trigger?: 'post-build'
+  /** Shell command template to execute (hook-type skills only). Supports {workDir} placeholder. */
+  command?: string
 }
 
 export interface ResolvedSkill {
@@ -101,6 +107,12 @@ function parseFrontmatter(content: string): { metadata: Partial<SkillMetadata>; 
       metadata.category = value
     } else if (key === 'source') {
       metadata.source = value as 'local' | 'github' | 'team'
+    } else if (key === 'type') {
+      metadata.type = value as 'prompt' | 'hook'
+    } else if (key === 'trigger') {
+      metadata.trigger = value as 'post-build'
+    } else if (key === 'command') {
+      metadata.command = value
     }
   }
 
@@ -155,6 +167,9 @@ export function loadSkillIndex(): IndexedSkill[] {
         tags: metadata.tags ?? [],
         scope: metadata.scope ?? ['global', 'node', 'build'],
         priority: metadata.priority ?? 50,
+        type: metadata.type ?? 'prompt',
+        ...(metadata.trigger !== undefined ? { trigger: metadata.trigger } : {}),
+        ...(metadata.command !== undefined ? { command: metadata.command } : {}),
       }
 
       index.push({ metadata: skillMeta, filePath })
@@ -215,6 +230,9 @@ export function resolveSkillsForTask(
     const { metadata, filePath } = skill
     let reason: string | null = null
 
+    // Hook-type skills are excluded from context injection; use resolveHooks() instead.
+    if (metadata.type === 'hook') continue
+
     // 1. core/* — always included regardless of scope
     if (metadata.category === 'core') {
       reason = 'required'
@@ -249,6 +267,32 @@ export function resolveSkillsForTask(
   }
 
   return resolved
+}
+
+/**
+ * Return all hook-type skills matching the given trigger.
+ * agentType and scope are reserved for future filtering.
+ */
+export function resolveHooks(
+  _agentType: 'canvas' | 'build',
+  _scope: 'global' | 'node',
+  _techStack?: string,
+  trigger: 'post-build' = 'post-build'
+): ResolvedSkill[] {
+  const index = loadSkillIndex()
+  const hooks: ResolvedSkill[] = []
+
+  for (const { metadata, filePath } of index) {
+    if (metadata.type !== 'hook') continue
+    if (metadata.trigger !== trigger) continue
+    if (!metadata.command) continue
+
+    const raw = fs.readFileSync(filePath, 'utf-8')
+    const { body } = parseFrontmatter(raw)
+    hooks.push({ metadata, content: body.trim(), reason: `hook: ${trigger}` })
+  }
+
+  return hooks
 }
 
 /**

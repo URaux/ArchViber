@@ -1,7 +1,7 @@
 'use client'
 
 import { useTransition } from 'react'
-import type { Node } from '@xyflow/react'
+import type { Edge, Node } from '@xyflow/react'
 import {
   buildAll as buildAllPrompt,
   buildNode as buildNodePrompt,
@@ -10,9 +10,47 @@ import {
 import { canvasToYaml, yamlToCanvas } from '@/lib/schema-engine'
 import { useAppStore } from '@/lib/store'
 import { topoSort } from '@/lib/topo-sort'
-import type { BlockNodeData } from '@/lib/types'
+import type { BlockNodeData, CanvasNodeData } from '@/lib/types'
 
 type BatchBuildMode = 'all' | 'selected'
+
+/**
+ * Build a scoped YAML containing only the target node, its parent container,
+ * 1-hop neighbors (nodes connected via edges), and edges between these nodes.
+ * This avoids sending the full architecture YAML to each per-node build agent.
+ */
+function scopeToNode(
+  nodeId: string,
+  nodes: Node<CanvasNodeData>[],
+  edges: Edge[],
+  projectName: string
+): string {
+  const targetNode = nodes.find((n) => n.id === nodeId)
+  if (!targetNode) return ''
+
+  // Collect 1-hop neighbor IDs
+  const neighborIds = new Set<string>()
+  neighborIds.add(nodeId)
+  if (targetNode.parentId) neighborIds.add(targetNode.parentId)
+
+  for (const edge of edges) {
+    if (edge.source === nodeId) neighborIds.add(edge.target)
+    if (edge.target === nodeId) neighborIds.add(edge.source)
+  }
+
+  // Include parent containers of neighbors so the YAML is well-formed
+  for (const id of [...neighborIds]) {
+    const node = nodes.find((n) => n.id === id)
+    if (node?.parentId) neighborIds.add(node.parentId)
+  }
+
+  const scopedNodes = nodes.filter((n) => neighborIds.has(n.id))
+  const scopedEdges = edges.filter(
+    (e) => neighborIds.has(e.source) && neighborIds.has(e.target)
+  )
+
+  return canvasToYaml(scopedNodes, scopedEdges, projectName)
+}
 
 function buildWaveSummary(waves: string[][], nodeNames: Map<string, string>) {
   return waves
@@ -100,9 +138,12 @@ export function useBuildActions() {
       const prompts = Object.fromEntries(
         scopedBlocks.map((node) => {
           const targetName = node.data.name || node.id
+          // Use a node-scoped YAML (target + 1-hop neighbors) instead of the
+          // full architecture to reduce token cost and agent confusion.
+          const nodeYaml = scopeToNode(node.id, nodes, edges, projectName)
           const prompt = [
             promptTemplate({
-              architecture_yaml: scopedYaml,
+              architecture_yaml: nodeYaml,
               selected_nodes: [targetName],
               project_context: [
                 `Project: ${projectName}`,
@@ -194,7 +235,7 @@ export function useBuildActions() {
       const techInfo = targetNode.data.techStack ? [`Tech stack: ${targetNode.data.techStack}`] : []
       const prompt = [
         buildNodePrompt({
-          architecture_yaml: canvasToYaml(nodes, edges, projectName),
+          architecture_yaml: scopeToNode(nodeId, nodes, edges, projectName),
           selected_nodes: [targetName],
           project_context: [
             `Project: ${projectName}`,
@@ -284,11 +325,114 @@ export function useBuildActions() {
     })
   }
 
+  async function runRetryFailed() {
+    const { nodes: currentNodes, edges: currentEdges } = useAppStore.getState()
+    const failedNodes = currentNodes.filter(
+      (n): n is Node<BlockNodeData> => n.type === 'block' && (n.data as BlockNodeData).status === 'error'
+    )
+
+    if (failedNodes.length === 0) return
+
+    const targetNodeIds = failedNodes.map((n) => n.id)
+    const nodeNames = new Map(failedNodes.map((n) => [n.id, (n.data as BlockNodeData).name || n.id]))
+    const waves = [targetNodeIds]
+    const waveSummary = buildWaveSummary(waves, nodeNames)
+
+    const prompts = Object.fromEntries(
+      failedNodes.map((node) => {
+        const targetName = (node.data as BlockNodeData).name || node.id
+        const techInfo = (node.data as BlockNodeData).techStack
+          ? [`Tech stack: ${(node.data as BlockNodeData).techStack}`]
+          : []
+        const nodeYaml = scopeToNode(node.id, currentNodes, currentEdges, projectName)
+        const prompt = [
+          buildNodePrompt({
+            architecture_yaml: nodeYaml,
+            selected_nodes: [targetName],
+            project_context: [
+              `Project: ${projectName}`,
+              'Scope: retry failed',
+              `Target node: ${targetName}`,
+              ...techInfo,
+              waveSummary,
+            ].join('\n'),
+            user_feedback: `Retry implementing ${targetName} in ${config.workDir}. Keep changes focused on this node.`,
+            locale,
+          }),
+          '',
+          'Execution instructions:',
+          `Retry the implementation of ${targetName} in the current workspace.`,
+          ...techInfo,
+          'Keep changes focused on this node.',
+        ].join('\n')
+
+        return [node.id, prompt]
+      })
+    )
+
+    try {
+      useAppStore.getState().clearBuildOutputLog()
+
+      for (const nodeId of targetNodeIds) {
+        updateNodeStatus(nodeId, 'idle', undefined, undefined)
+      }
+
+      setBuildState({
+        active: true,
+        currentWave: 1,
+        totalWaves: 1,
+        targetNodeIds,
+        waves,
+        nodeTimings: {},
+        blockedNodes: {},
+        startedAt: Date.now(),
+        completedAt: undefined,
+      })
+
+      const response = await fetch('/api/agent/spawn', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          waves,
+          prompts,
+          backend: config.agent,
+          workDir: config.workDir,
+          maxParallel: config.maxParallel,
+          model: config.model,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to start retry build.')
+      }
+    } catch (error) {
+      setBuildState({ active: false, currentWave: 0, totalWaves: 0, targetNodeIds: [] })
+
+      for (const nodeId of targetNodeIds) {
+        updateNodeStatus(
+          nodeId,
+          'error',
+          undefined,
+          error instanceof Error ? error.message : 'Failed to start retry build.'
+        )
+      }
+    }
+  }
+
+  function retryFailed() {
+    if (isBuilding) return
+
+    startTransition(() => {
+      void runRetryFailed()
+    })
+  }
+
   return {
     buildAll,
     buildNode,
     buildSelected,
     computeBuildPlan,
+    retryFailed,
     isBuilding,
     selectedCount,
   }

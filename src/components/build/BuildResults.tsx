@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useAppStore } from '@/lib/store'
 import { t } from '@/lib/i18n'
 import type { BuildStatus } from '@/lib/types'
+import { useBuildActions } from '@/hooks/useBuildActions'
 
 // ---- Elapsed time helper ----
 
@@ -198,6 +199,7 @@ export function BuildResults() {
   const buildState = useAppStore((state) => state.buildState)
   const nodes = useAppStore((state) => state.nodes)
   const buildOutputLog = useAppStore((state) => state.buildOutputLog)
+  const { retryFailed, isBuilding } = useBuildActions()
 
   const { targetNodeIds, nodeTimings, blockedNodes, startedAt, completedAt } = buildState
 
@@ -285,6 +287,21 @@ export function BuildResults() {
           />
         ))}
       </div>
+      {errorCount > 0 && (
+        <div className="shrink-0 border-t border-slate-200/80 px-4 py-3">
+          <button
+            type="button"
+            disabled={isBuilding}
+            onClick={retryFailed}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            {t('retry_failed')}
+          </button>
+        </div>
+      )}
     </div>
   )
 }
