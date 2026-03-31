@@ -4,7 +4,7 @@
 
 **Describe your idea in one sentence. AI designs the architecture, draws it on a canvas, and generates the code.**
 
-Tell the AI "build me a food delivery app." It asks sharp questions like a senior architect: customer-facing or merchant-facing? Need real-time delivery tracking? Once the design is locked, the architecture diagram appears on the canvas — containers, modules, edges, all laid out automatically. Then hit Build All, and AI generates code for every module in parallel, respecting dependency order.
+Tell the AI "build me a cross-border e-commerce system with product sourcing, ad management, fraud detection, and AI customer service." It asks sharp questions like a senior architect: scraping or API for product sourcing? Which ad platforms to integrate? Rule engine or ML model for fraud detection? Once the design is locked, the architecture diagram appears on the canvas — product sourcing engine, ad manager, fraud center, AI chatbot — containers, modules, edges, all laid out automatically. Then hit Build All, and AI generates code for every module in parallel, respecting dependency order.
 
 **This is not a diagramming tool.** It's an AI architecture partner: from fuzzy idea to runnable code, entirely conversation-driven.
 
@@ -20,15 +20,15 @@ Tell the AI "build me a food delivery app." It asks sharp questions like a senio
 
 ## Core Workflow
 
-1. 💬 **"Build me a food delivery app"** — Start with one sentence. AI asks like a senior architect: Who are the target users? What are the core features? Any tech stack preferences?
+1. 💬 **"Build me a food delivery app"** — Start with one sentence. AI asks like a senior architect: Where does product data come from? Which ad platforms? Need multilingual customer service?
 2. 🧠 **AI brainstorms** — Discusses tech choices, database design, API structure. AI raises questions you hadn't considered, until the plan is solid.
 3. 🎨 **Architecture auto-generates** — Containers, modules, and edges appear on the canvas instantly. No dragging, no learning curve.
 4. 🔄 **Iterate through conversation** — "Add payment" or "Split the database into read/write replicas" — the architecture updates in real time. Every step is undoable.
 5. 🚀 **One-click build** — Topologically sorted, wave-parallel AI code generation. Watch each module's build progress live.
 
 ```
-"Build me a food       AI brainstorms        Architecture         Iterate via        One-click
- delivery app"    ──→  asks · decides · ──→  auto-generates  ──→  conversation  ──→  build
+"Cross-border         AI brainstorms        Architecture         Iterate via        One-click
+ e-commerce"     ──→  asks · decides · ──→  auto-generates  ──→  conversation  ──→  build
  One sentence          confirms               Canvas auto-layout   Live updates       Wave-parallel codegen
 ```
 
