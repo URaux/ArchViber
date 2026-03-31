@@ -178,25 +178,22 @@ function applyActionToSnapshot(
 
 export function useCanvasActions() {
   const [actionErrors, setActionErrors] = useState<Record<string, string>>({})
-  const [lastCanvasSnapshot, setLastCanvasSnapshot] = useState<{
-    nodes: CanvasNode[]
-    edges: Edge[]
-  } | null>(null)
-  const [lastAppliedActionKey, setLastAppliedActionKey] = useState<string | null>(null)
 
-  async function applyCanvasActions(rawActions: string[], actionKey: string) {
+  async function applyCanvasActions(rawActions: string[], messageIndex: number): Promise<void> {
     if (rawActions.length === 0) {
       return
     }
 
-    // Use getState() to avoid stale closure captures
+    // Read current canvas — always incremental, no hasExistingCanvas branch
     const { nodes, edges } = useAppStore.getState()
-    const snapshot = cloneCanvas(nodes, edges)
+    const canvasBefore = cloneCanvas(nodes, edges)
+
+    // Use a string key for error tracking based on messageIndex
+    const errorKey = String(messageIndex)
 
     try {
-      const hasExistingCanvas = snapshot.nodes.length > 0
-      let workingNodes: CanvasNode[] = hasExistingCanvas ? snapshot.nodes : []
-      let workingEdges: Edge[] = hasExistingCanvas ? snapshot.edges : []
+      let workingNodes: CanvasNode[] = [...canvasBefore.nodes]
+      let workingEdges: Edge[] = [...canvasBefore.edges]
 
       for (const rawAction of rawActions) {
         const parsed = tryRepairJson(rawAction)
@@ -234,48 +231,65 @@ export function useCanvasActions() {
       const arranged = await layoutArchitectureCanvas(workingNodes, validEdges)
       useAppStore.getState().setCanvas(arranged.nodes, arranged.edges)
 
+      const canvasAfter = cloneCanvas(arranged.nodes, arranged.edges)
+
+      // Attach canvasBefore + canvasAfter to the message at messageIndex
+      useAppStore.getState().updateActiveChatMessages((msgs) => {
+        const updated = [...msgs]
+        if (updated[messageIndex] && updated[messageIndex].role === 'assistant') {
+          updated[messageIndex] = {
+            ...updated[messageIndex],
+            canvasBefore,
+            canvasAfter,
+          }
+        }
+        return updated
+      })
+
       // Save canvas snapshot to current chat session for session switching
       const { activeChatSessionId, chatSessions } = useAppStore.getState()
       if (activeChatSessionId) {
-        const updated = chatSessions.map((s) =>
+        const updatedSessions = chatSessions.map((s) =>
           s.id === activeChatSessionId
             ? { ...s, canvasSnapshot: { nodes: arranged.nodes, edges: arranged.edges } }
             : s
         )
-        useAppStore.setState({ chatSessions: updated })
+        useAppStore.setState({ chatSessions: updatedSessions })
       }
 
-      setLastCanvasSnapshot(snapshot)
-      setLastAppliedActionKey(actionKey)
       setActionErrors((current) => {
         const next = { ...current }
-        delete next[actionKey]
+        delete next[errorKey]
         return next
       })
     } catch (applyError) {
       setActionErrors((current) => ({
         ...current,
-        [actionKey]:
+        [errorKey]:
           applyError instanceof Error ? applyError.message : t('apply_canvas_failed'),
       }))
     }
   }
 
-  function restorePreviousCanvasVersion(actionKey: string) {
-    if (!lastCanvasSnapshot || lastAppliedActionKey !== actionKey) {
-      return
+  function restoreSnapshot(snapshot: { nodes: CanvasNode[]; edges: Edge[] }): void {
+    const store = useAppStore.getState()
+    store.pushCanvasSnapshot()
+    store.setCanvas(snapshot.nodes, snapshot.edges)
+    // Update session canvasSnapshot
+    const { activeChatSessionId, chatSessions } = useAppStore.getState()
+    if (activeChatSessionId) {
+      const updated = chatSessions.map((s) =>
+        s.id === activeChatSessionId
+          ? { ...s, canvasSnapshot: { nodes: snapshot.nodes, edges: snapshot.edges } }
+          : s
+      )
+      useAppStore.setState({ chatSessions: updated })
     }
-
-    useAppStore.getState().setCanvas(lastCanvasSnapshot.nodes, lastCanvasSnapshot.edges)
-    setLastCanvasSnapshot(null)
-    setLastAppliedActionKey(null)
   }
 
   return {
     applyCanvasActions,
-    restorePreviousCanvasVersion,
+    restoreSnapshot,
     actionErrors,
-    lastCanvasSnapshot,
-    lastAppliedActionKey,
   }
 }

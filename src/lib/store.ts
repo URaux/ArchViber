@@ -33,6 +33,8 @@ export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   actions?: string[]
+  canvasBefore?: { nodes: Node<CanvasNodeData>[]; edges: Edge[] }
+  canvasAfter?: { nodes: Node<CanvasNodeData>[]; edges: Edge[] }
 }
 
 export interface ChatSession {

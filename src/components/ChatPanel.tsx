@@ -251,7 +251,7 @@ export function ChatPanel() {
   const createChatSession = useAppStore((state) => state.createChatSession)
   const updateActiveChatMessages = useAppStore((state) => state.updateActiveChatMessages)
   const workDir = useAppStore((state) => state.config.workDir)
-  const { applyCanvasActions, restorePreviousCanvasVersion, actionErrors, lastCanvasSnapshot, lastAppliedActionKey } = useCanvasActions()
+  const { applyCanvasActions, restoreSnapshot, actionErrors } = useCanvasActions()
   const [message, setMessage] = useState('')
   const [isSending, setIsSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -274,8 +274,12 @@ export function ChatPanel() {
       (m) => m.role === 'assistant' && m.actions?.some((a) => a.includes('"add-node"'))
     )
     if (lastActionMsg?.actions) {
-      const actionKey = `${activeChatSessionId}-auto-restore`
-      void applyCanvasActions(lastActionMsg.actions, actionKey)
+      // Legacy auto-restore: find the message index for snapshot attachment
+      const messages = session?.messages ?? []
+      const lastActionMsgIndex = messages.length - 1 - [...messages].reverse().findIndex(
+        (m) => m.role === 'assistant' && m.actions?.some((a) => a.includes('"add-node"'))
+      )
+      void applyCanvasActions(lastActionMsg.actions, lastActionMsgIndex)
     }
   }, [activeChatSessionId, chatSessions])
   const nodeContext = useMemo(
@@ -348,7 +352,8 @@ export function ChatPanel() {
 
     const sessionId = activeChatSessionId ?? createChatSession()
     const nextHistory = [...activeMessages, { role: 'user' as const, content: trimmedMessage }]
-    const assistantActionKey = `${sessionId}-${nextHistory.length}`
+    // messageIndex points to the assistant message that will be appended after nextHistory
+    const messageIndex = nextHistory.length
 
     setMessage('')
     setError(null)
@@ -382,6 +387,7 @@ export function ChatPanel() {
       let buffer = ''
       let fullAssistantText = ''
       let visibleAssistantText = ''
+      let streamCompletedNormally = false
 
       while (true) {
         const { value, done } = await reader.read()
@@ -412,11 +418,13 @@ export function ChatPanel() {
         }
       }
 
+      streamCompletedNormally = true
+
       const actionBlocks = extractActionBlocks(fullAssistantText)
       updateAssistantMessage(extractVisibleChatText(fullAssistantText), actionBlocks)
-      // Auto-apply canvas actions for every message (not just the first)
-      if (actionBlocks.length > 0) {
-        await applyCanvasActions(actionBlocks, assistantActionKey)
+      // Auto-apply canvas actions only when stream completed without error
+      if (streamCompletedNormally && actionBlocks.length > 0) {
+        await applyCanvasActions(actionBlocks, messageIndex)
       }
       // Auto-generate session title + project name via lightweight title endpoint
       const sid = sessionId
@@ -545,39 +553,37 @@ export function ChatPanel() {
                       {entry.content || '...'}
                     </div>
                   )}
-                  {actionBlocks.length > 0 ? (
+                  {actionBlocks.length > 0 && (entry.canvasBefore ?? entry.canvasAfter) ? (
                     <div className="mt-3 flex flex-wrap gap-2">
-                      {(() => {
-                        const actionKey = `${activeChatSessionId}-${messageIndex}`
-
-                        return (
-                          <div className="space-y-2">
-                            <div className="flex flex-wrap gap-2">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  void applyCanvasActions(actionBlocks, actionKey)
-                                }}
-                                className="vp-button-secondary rounded-full px-3 py-1 text-xs font-medium"
-                              >
-                                {locale === 'zh' ? '重新应用' : 'Re-apply'}
-                              </button>
-                              {lastCanvasSnapshot && lastAppliedActionKey === actionKey ? (
-                                <button
-                                  type="button"
-                                  onClick={() => restorePreviousCanvasVersion(actionKey)}
-                                  className="vp-button-secondary rounded-full px-3 py-1 text-xs font-medium"
-                                >
-                                  {locale === 'zh' ? '撤销此修改' : 'Undo This Change'}
-                                </button>
-                              ) : null}
-                            </div>
-                            {actionErrors[actionKey] ? (
-                              <div className="max-h-16 overflow-y-auto text-xs text-rose-600">{actionErrors[actionKey]}</div>
-                            ) : null}
-                          </div>
-                        )
-                      })()}
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap gap-2">
+                          {entry.canvasAfter ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                restoreSnapshot(entry.canvasAfter!)
+                              }}
+                              className="vp-button-secondary rounded-full px-3 py-1 text-xs font-medium"
+                            >
+                              {locale === 'zh' ? '重新应用' : 'Re-apply'}
+                            </button>
+                          ) : null}
+                          {entry.canvasBefore ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                restoreSnapshot(entry.canvasBefore!)
+                              }}
+                              className="vp-button-secondary rounded-full px-3 py-1 text-xs font-medium"
+                            >
+                              {locale === 'zh' ? '撤销此修改' : 'Undo This Change'}
+                            </button>
+                          ) : null}
+                        </div>
+                        {actionErrors[String(messageIndex)] ? (
+                          <div className="max-h-16 overflow-y-auto text-xs text-rose-600">{actionErrors[String(messageIndex)]}</div>
+                        ) : null}
+                      </div>
                     </div>
                   ) : null}
                 </div>
