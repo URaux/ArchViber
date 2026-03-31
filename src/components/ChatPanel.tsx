@@ -763,7 +763,8 @@ export function ChatPanel() {
 
       const actionBlocks = extractActionBlocks(fullAssistantText)
       updateAssistantMessage(extractVisibleChatText(fullAssistantText), actionBlocks)
-      if (shouldAutoApply && actionBlocks.length > 0) {
+      // Auto-apply canvas actions for every message (not just the first)
+      if (actionBlocks.length > 0) {
         await applyCanvasActions(actionBlocks, assistantActionKey)
       }
       // Auto-generate session title via lightweight title endpoint
@@ -873,7 +874,12 @@ export function ChatPanel() {
                       {entry.content ? (
                         <ChatMarkdown content={entry.content} />
                       ) : (
-                        actionBlocks.length > 0 ? null : <span>...</span>
+                        actionBlocks.length > 0 ? null : (
+                          <div className="flex items-center gap-2 text-slate-400">
+                            <span className="vp-spinner" />
+                            <span className="text-xs">{locale === 'zh' ? 'AI 正在思考...' : 'AI is thinking...'}</span>
+                          </div>
+                        )
                       )}
                     </div>
                   ) : (
@@ -894,9 +900,9 @@ export function ChatPanel() {
                                 onClick={() => {
                                   void applyCanvasActions(actionBlocks, actionKey)
                                 }}
-                                className="vp-button-primary rounded-full px-3 py-1 text-xs font-medium"
+                                className="vp-button-secondary rounded-full px-3 py-1 text-xs font-medium"
                               >
-                                {t('apply_to_canvas')}
+                                {locale === 'zh' ? '重新应用' : 'Re-apply'}
                               </button>
                               {lastCanvasSnapshot && lastAppliedActionKey === actionKey ? (
                                 <button
@@ -904,7 +910,7 @@ export function ChatPanel() {
                                   onClick={() => restorePreviousCanvasVersion(actionKey)}
                                   className="vp-button-secondary rounded-full px-3 py-1 text-xs font-medium"
                                 >
-                                  {locale === 'zh' ? '恢复上一个版本' : 'Restore Previous Version'}
+                                  {locale === 'zh' ? '撤销此修改' : 'Undo This Change'}
                                 </button>
                               ) : null}
                             </div>
