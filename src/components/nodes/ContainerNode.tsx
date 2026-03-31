@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Edge, Node, NodeProps } from '@xyflow/react'
+import { NodeResizer } from '@xyflow/react'
 import { COLLAPSED_CONTAINER_HEIGHT, layoutArchitectureCanvas } from '@/lib/graph-layout'
 import { t } from '@/lib/i18n'
 import { useAppStore } from '@/lib/store'
@@ -75,6 +76,13 @@ export function ContainerNode({ id, data, selected }: NodeProps<Node<ContainerNo
         colorClasses.border
       } ${selected ? 'ring-2 ring-orange-300/70 ring-offset-2 ring-offset-transparent' : ''}`}
     >
+      <NodeResizer
+        isVisible={selected && !nodeData.collapsed}
+        minWidth={300}
+        minHeight={140}
+        lineClassName="!border-orange-300/50"
+        handleClassName="!h-2.5 !w-2.5 !rounded-sm !border-orange-400 !bg-white"
+      />
       <div className="flex items-start justify-between gap-3 p-3">
         <span
           className={`inline-flex rounded-md px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white ${colorClasses.title}`}

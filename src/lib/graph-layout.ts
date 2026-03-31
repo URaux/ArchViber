@@ -9,11 +9,11 @@ import type { CanvasNodeData, ContainerNodeData } from '@/lib/types'
 const elk = new ELK()
 
 export const CONTAINER_PADDING = 60
-export const CONTAINER_SIDE_PADDING = 20
+export const CONTAINER_SIDE_PADDING = 30
 export const BLOCK_WIDTH = 200
 export const BLOCK_HEIGHT = 100
-export const CONTAINER_MIN_WIDTH = 300
-export const CONTAINER_MIN_HEIGHT = 140
+export const CONTAINER_MIN_WIDTH = 400
+export const CONTAINER_MIN_HEIGHT = 180
 export const COLLAPSED_CONTAINER_HEIGHT = 56
 
 type CanvasNode = Node<CanvasNodeData>
@@ -70,8 +70,9 @@ export async function layoutArchitectureCanvas(
         'elk.algorithm': 'layered',
         'elk.direction': 'RIGHT',
         'elk.edgeRouting': 'ORTHOGONAL',
-        'elk.padding': `[top=${CONTAINER_PADDING},left=${CONTAINER_SIDE_PADDING},bottom=20,right=${CONTAINER_SIDE_PADDING}]`,
-        'elk.spacing.nodeNode': '20',
+        'elk.padding': `[top=${CONTAINER_PADDING},left=${CONTAINER_SIDE_PADDING},bottom=${CONTAINER_SIDE_PADDING},right=${CONTAINER_SIDE_PADDING}]`,
+        'elk.spacing.nodeNode': '40',
+        'elk.spacing.edgeNode': '20',
       },
       children: (container.data as ContainerNodeData).collapsed
         ? []
@@ -127,10 +128,12 @@ export async function layoutArchitectureCanvas(
     layoutOptions: {
       'elk.algorithm': 'layered',
       'elk.direction': 'DOWN',
-      'elk.edgeRouting': 'ORTHOGONAL',
+      'elk.edgeRouting': 'SPLINES',
       'elk.hierarchyHandling': 'INCLUDE_CHILDREN',
-      'elk.spacing.nodeNode': '40',
-      'elk.layered.spacing.nodeNodeBetweenLayers': '60',
+      'elk.spacing.nodeNode': '60',
+      'elk.spacing.edgeNode': '40',
+      'elk.layered.spacing.nodeNodeBetweenLayers': '80',
+      'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
     },
     children: elkChildren,
     edges: rootEdges,
