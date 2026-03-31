@@ -5,7 +5,9 @@ import type { Edge, Node } from '@xyflow/react'
 import { t } from '@/lib/i18n'
 import { getRandomChatThinkingMessage } from '@/lib/loading-messages'
 import { extractActionBlocks, extractVisibleChatText } from '@/lib/chat-actions'
+import { parseOptions } from '@/lib/option-parser'
 import { ChatMarkdown } from './ChatMarkdown'
+import { OptionCards } from './OptionCards'
 import { canvasToYaml } from '@/lib/schema-engine'
 import { formatBuildContext } from '@/lib/build-context-formatter'
 import { useAppStore } from '@/lib/store'
@@ -509,6 +511,104 @@ export function ChatPanel() {
     }
   }
 
+  async function handleOptionSelect(text: string) {
+    if (isSending) return
+    setMessage('')
+    // Build a synthetic submit by temporarily overriding the message value
+    const trimmedMessage = text.trim()
+    if (!trimmedMessage) return
+
+    const sessionId = activeChatSessionId ?? createChatSession()
+    const nextHistory = [...activeMessages, { role: 'user' as const, content: trimmedMessage }]
+    const messageIndex = nextHistory.length
+
+    setError(null)
+    setIsSending(true)
+    updateActiveChatMessages(() => [...nextHistory, { role: 'assistant', content: '' }])
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: trimmedMessage,
+          history: nextHistory,
+          nodeContext,
+          codeContext: codeContext ?? undefined,
+          architecture_yaml: canvasToYaml(nodes, edges, projectName),
+          backend,
+          model,
+          locale,
+          phase: activeSession?.phase ?? 'brainstorm',
+          buildSummaryContext: formatBuildContext(
+            useAppStore.getState().buildState,
+            useAppStore.getState().nodes,
+            useAppStore.getState().buildOutputLog
+          ) ?? undefined,
+        }),
+      })
+
+      if (!response.ok || !response.body) {
+        throw new Error(t('chat_start_failed'))
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let fullAssistantText = ''
+      let visibleAssistantText = ''
+      let streamCompletedNormally = false
+
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+
+        const chunk = decoder.decode(value, { stream: true })
+        buffer += chunk
+        const { events, rest } = parseStreamEvents(buffer)
+        buffer = rest
+
+        for (const streamEvent of events) {
+          if (streamEvent.type === 'chunk' && streamEvent.text) {
+            fullAssistantText += streamEvent.text
+            const nextVisibleText = extractVisibleChatText(fullAssistantText)
+            if (nextVisibleText !== visibleAssistantText) {
+              visibleAssistantText = nextVisibleText
+              updateAssistantMessage(visibleAssistantText)
+            }
+            continue
+          }
+          if (streamEvent.type === 'error') {
+            throw new Error(streamEvent.error ?? t('chat_failed'))
+          }
+        }
+      }
+
+      streamCompletedNormally = true
+
+      const actionBlocks = extractActionBlocks(fullAssistantText)
+      updateAssistantMessage(extractVisibleChatText(fullAssistantText), actionBlocks)
+      const currentPhase = useAppStore.getState().chatSessions.find((s) => s.id === sessionId)?.phase ?? 'brainstorm'
+      if (streamCompletedNormally && actionBlocks.length > 0 && currentPhase !== 'brainstorm') {
+        await applyCanvasActions(actionBlocks, messageIndex)
+        if (currentPhase === 'design') {
+          useAppStore.getState().setSessionPhase(sessionId, 'iterate')
+        }
+      }
+    } catch (sendError) {
+      setError(sendError instanceof Error ? sendError.message : t('send_failed'))
+      updateActiveChatMessages((current) => {
+        const lastMessage = current.at(-1)
+        if (!lastMessage || lastMessage.role !== 'assistant' || lastMessage.content.trim()) {
+          return current
+        }
+        return current.slice(0, -1)
+      })
+    } finally {
+      setIsSending(false)
+    }
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <button
@@ -556,6 +656,14 @@ export function ChatPanel() {
                 ? rawActionBlocks
                 : []
 
+              // Detect if this is the last assistant message (for option cards)
+              const isLastAssistant =
+                entry.role === 'assistant' && messageIndex === activeMessages.length - 1
+              const parsedOptions =
+                isLastAssistant && !isSending && entry.content
+                  ? parseOptions(entry.content)
+                  : null
+
               // System messages (build events) render as slim muted banners, not bubbles
               const isSystemMessage =
                 entry.role === 'assistant' &&
@@ -587,7 +695,23 @@ export function ChatPanel() {
                   {entry.role === 'assistant' ? (
                     <div className="break-words">
                       {entry.content ? (
-                        <ChatMarkdown content={entry.content} />
+                        parsedOptions ? (
+                          <>
+                            {parsedOptions.textBefore && (
+                              <ChatMarkdown content={parsedOptions.textBefore} />
+                            )}
+                            <OptionCards
+                              options={parsedOptions.options}
+                              disabled={isSending}
+                              onSelect={(text) => { void handleOptionSelect(text) }}
+                            />
+                            {parsedOptions.textAfter && (
+                              <ChatMarkdown content={parsedOptions.textAfter} />
+                            )}
+                          </>
+                        ) : (
+                          <ChatMarkdown content={entry.content} />
+                        )
                       ) : (
                         actionBlocks.length > 0 ? null : (
                           <div className="flex items-center gap-2 text-slate-400">
