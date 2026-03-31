@@ -2,22 +2,26 @@
 
 [中文](README.md) | **English**
 
-Design software architecture on a canvas, discuss it with AI, and generate code in one click.
+**Describe what you want to build in natural language. AI designs the architecture, draws it on a canvas, and generates the code.**
 
-**Target users**: People with product thinking who cannot code — PMs, founders, designers — who want to turn system diagrams directly into working code without writing a single line themselves.
+No manual diagramming needed — just tell the AI what you're building. It designs the architecture, visualizes it, and writes the code. You only confirm and adjust.
+
+**Target users**: People with product ideas who don't want to write code — PMs, founders, indie hackers — turn ideas into running projects through conversation.
 
 ---
 
 ## Core Workflow
 
 ```
-Design Canvas ──→ AI Discussion ──→ Build All ──→ Code Generated
-Drag containers    Discuss & iterate   Wave scheduling   Local AI CLI runs
+Describe idea ──→ AI discusses ──→ AI generates architecture ──→ Build All ──→ AI writes code
+Tell AI what      AI asks questions   Auto-drawn on canvas      Wave scheduling   Local AI CLI
+you need          to clarify needs                               parallel agents   execution
 ```
 
-1. **Design** — Drag Containers (service groups) and Blocks (components) onto the canvas. Connect them with typed edges to describe dependencies. Or import an existing codebase — Vibe Pencil reverse-engineers it into an architecture canvas automatically.
-2. **Discuss** — Open the chat panel and talk to the AI about architecture tradeoffs, implementation order, or missing pieces. The AI can propose canvas mutations (add/update/remove nodes and edges) that you apply with one click. Three-phase session workflow: brainstorm (gather requirements) → design (generate architecture) → iterate (refine).
-3. **Build** — Click "Build All". The canvas is topologically sorted into parallel waves, serialized to YAML, and dispatched to your local AI CLI tool. Build progress streams back in real time via SSE.
+1. **Describe** — Start a new chat, describe the system you want in plain language (e.g., "Design an online bookstore"). The AI asks questions, clarifies requirements, and proposes a design — like a senior architect.
+2. **AI generates architecture** — Once the design is confirmed, AI automatically generates the architecture diagram on the canvas (containers, modules, edges). No manual dragging required. You can also import an existing codebase — AI reverse-engineers it into an architecture in seconds.
+3. **Iterate** — Continue chatting to modify the architecture ("add payment", "split the database"). AI incrementally updates the canvas. Every change can be undone or re-applied.
+4. **Build** — Click "Build All". Code is generated in dependency-aware parallel waves, with real-time progress streaming for each module.
 
 ---
 
