@@ -128,15 +128,42 @@ export async function POST(request: Request) {
     const imported: ImportedSkill[] = []
 
     if (source.startsWith('http://') || source.startsWith('https://')) {
-      // URL import
-      const rawUrl = source.includes('github.com') ? toRawGitHubUrl(source) : source
-      const res = await fetch(rawUrl)
-      if (!res.ok) {
-        return Response.json({ error: `Failed to fetch URL: ${res.status} ${res.statusText}` }, { status: 400 })
+      // URL import — detect if it's a repo/directory or a single file
+      const ghMatch = /github\.com\/([^/]+)\/([^/]+)(?:\/(?:tree|blob)\/([^/]+)\/?(.*?))?$/
+        .exec(source)
+
+      if (ghMatch && (!ghMatch[4] || !ghMatch[4].endsWith('.md'))) {
+        // GitHub repo or directory — use API to list .md files
+        const [, owner, repo, branch = 'main', dirPath = ''] = ghMatch
+        const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${dirPath}?ref=${branch}`
+        const apiRes = await fetch(apiUrl, {
+          headers: { 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'VibePencil' },
+        })
+        if (!apiRes.ok) {
+          return Response.json({ error: `GitHub API error: ${apiRes.status}` }, { status: 400 })
+        }
+        const entries = (await apiRes.json()) as Array<{ name: string; download_url: string | null; type: string }>
+        const mdFiles = entries.filter((e) => e.type === 'file' && e.name.endsWith('.md') && e.download_url)
+        if (mdFiles.length === 0) {
+          return Response.json({ error: 'No .md files found in this GitHub directory' }, { status: 400 })
+        }
+        for (const file of mdFiles) {
+          const fileRes = await fetch(file.download_url!)
+          if (!fileRes.ok) continue
+          const content = await fileRes.text()
+          imported.push(processContent(content, file.name, file.download_url!, 'github'))
+        }
+      } else {
+        // Single file URL
+        const rawUrl = source.includes('github.com') ? toRawGitHubUrl(source) : source
+        const res = await fetch(rawUrl)
+        if (!res.ok) {
+          return Response.json({ error: `Failed to fetch URL: ${res.status} ${res.statusText}` }, { status: 400 })
+        }
+        const content = await res.text()
+        const fileName = path.basename(new URL(rawUrl).pathname)
+        imported.push(processContent(content, fileName, rawUrl, 'github'))
       }
-      const content = await res.text()
-      const fileName = path.basename(new URL(rawUrl).pathname)
-      imported.push(processContent(content, fileName, rawUrl, 'github'))
     } else {
       // Local path import
       const normalizedPath = source.replace(/\\/g, '/')
