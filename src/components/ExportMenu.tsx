@@ -100,13 +100,13 @@ export function ExportMenu() {
 
     try {
       // Use React Flow's coordinate system to compute full bounds
-      const padding = 80
+      const padding = 40
       const bounds = getNodesBounds(nodes)
       const imageWidth = bounds.width + padding * 2
       const imageHeight = bounds.height + padding * 2
 
-      // Calculate viewport transform to show all nodes
-      const vp = getViewportForBounds(bounds, imageWidth, imageHeight, 0.5, 2, padding)
+      // Calculate viewport transform to show all nodes — min zoom 1.0 to avoid shrinking
+      const vp = getViewportForBounds(bounds, imageWidth, imageHeight, 1, 2, padding)
 
       const dataUrl = await toPng(viewport, {
         backgroundColor: '#ffffff',
