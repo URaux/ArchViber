@@ -45,8 +45,29 @@ const IMPORT_MESSAGES_ZH = [
   "正在理清意大利面条式的代码...",
 ]
 
+const CHAT_THINKING_EN = [
+  "Sketching the architecture in my head...",
+  "Considering your requirements...",
+  "Analyzing the best approach...",
+  "Thinking through the tradeoffs...",
+  "Evaluating tech stack options...",
+  "Designing the module boundaries...",
+  "Planning the data flow...",
+]
+
+const CHAT_THINKING_ZH = [
+  "正在构思架构方案...",
+  "正在分析你的需求...",
+  "正在权衡技术选型...",
+  "正在设计模块边界...",
+  "正在规划数据流向...",
+  "正在评估最佳方案...",
+  "正在思考系统拓扑...",
+]
+
 let lastIndex = -1
 let lastImportIndex = -1
+let lastChatThinkingIndex = -1
 
 function pickRandom(pool: string[], lastIdx: number): { index: number; message: string } {
   let index: number
@@ -69,5 +90,13 @@ export function getRandomImportMessage(): string {
   const pool = locale === 'zh' ? IMPORT_MESSAGES_ZH : IMPORT_MESSAGES_EN
   const result = pickRandom(pool, lastImportIndex)
   lastImportIndex = result.index
+  return result.message
+}
+
+export function getRandomChatThinkingMessage(): string {
+  const locale = getLocale()
+  const pool = locale === 'zh' ? CHAT_THINKING_ZH : CHAT_THINKING_EN
+  const result = pickRandom(pool, lastChatThinkingIndex)
+  lastChatThinkingIndex = result.index
   return result.message
 }

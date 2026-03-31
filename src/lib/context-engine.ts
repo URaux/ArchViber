@@ -315,7 +315,9 @@ function layerOutputFormat(agentType: AgentType, task: TaskType, locale: Locale,
       'Focus on understanding requirements, clarifying questions, and proposing design approaches.',
       'When you have enough information, summarize the proposed architecture in text.',
       'The user will explicitly transition to design mode when ready.',
-      locale === 'zh' ? '当前处于需求讨论阶段。请通过提问和讨论来理解用户需求，不要直接生成架构。' : '',
+      locale === 'zh'
+        ? '当前处于需求讨论阶段。请通过提问和讨论来理解用户需求，不要直接生成架构。\n每次只问 1-2 个最关键的问题，不要一次列出所有问题。等用户回答后再继续深入。如果有明确选项，用编号列出供用户选择（例如"1. 方案A 2. 方案B 3. 自定义输入"）。'
+        : 'Ask only 1-2 key questions at a time. Wait for the user\'s answer before diving deeper. When there are clear options, list them as numbered choices (e.g., "1. Option A  2. Option B  3. Custom input").',
     ].filter(Boolean).join('\n')
   }
 

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Edge, Node } from '@xyflow/react'
 import { t } from '@/lib/i18n'
+import { getRandomChatThinkingMessage } from '@/lib/loading-messages'
 import { extractActionBlocks, extractVisibleChatText } from '@/lib/chat-actions'
 import { ChatMarkdown } from './ChatMarkdown'
 import { canvasToYaml } from '@/lib/schema-engine'
@@ -237,6 +238,17 @@ function parseStreamEvents(buffer: string) {
   return { events, rest }
 }
 
+function getAgentDisplayName(backend: string, model: string): string {
+  if (model.includes('claude')) return 'Claude'
+  if (model.includes('gpt')) return 'GPT'
+  if (model.includes('gemini')) return 'Gemini'
+  if (model.includes('deepseek')) return 'DeepSeek'
+  if (backend === 'claude-code') return 'Claude'
+  if (backend === 'codex') return 'Codex'
+  if (backend === 'gemini') return 'Gemini'
+  return 'AI'
+}
+
 export function ChatPanel() {
   const nodes = useAppStore((state) => state.nodes)
   const edges = useAppStore((state) => state.edges)
@@ -259,6 +271,7 @@ export function ChatPanel() {
   const [error, setError] = useState<string | null>(null)
   const [codeContext, setCodeContext] = useState<string | null>(null)
   const [isLoadingCode, setIsLoadingCode] = useState(false)
+  const [thinkingMsg, setThinkingMsg] = useState('')
 
   const activeSession = chatSessions.find((s) => s.id === activeChatSessionId)
   const activeMessages = activeSession?.messages ?? []
@@ -297,6 +310,16 @@ export function ChatPanel() {
       setCodeContext(null)
     }
   }, [selectedNodeId])
+
+  // Rotate thinking messages while isSending is true
+  useEffect(() => {
+    if (!isSending) return
+    setThinkingMsg(getRandomChatThinkingMessage())
+    const interval = setInterval(() => {
+      setThinkingMsg(getRandomChatThinkingMessage())
+    }, 4000)
+    return () => clearInterval(interval)
+  }, [isSending])
 
   const selectedBlockData = selectedNode?.type === 'block'
     ? (selectedNode.data as BlockNodeData)
@@ -562,7 +585,7 @@ export function ChatPanel() {
                   }`}
                 >
                   <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
-                    {entry.role === 'user' ? t('user') : t('assistant')}
+                    {entry.role === 'user' ? t('user') : getAgentDisplayName(backend, model)}
                   </div>
                   {entry.role === 'assistant' ? (
                     <div className="break-words">
@@ -572,7 +595,7 @@ export function ChatPanel() {
                         actionBlocks.length > 0 ? null : (
                           <div className="flex items-center gap-2 text-slate-400">
                             <span className="vp-spinner" />
-                            <span className="text-xs">{locale === 'zh' ? 'AI 正在思考...' : 'AI is thinking...'}</span>
+                            <span className="text-xs">{thinkingMsg || (locale === 'zh' ? 'AI 正在思考...' : 'AI is thinking...')}</span>
                           </div>
                         )
                       )}
