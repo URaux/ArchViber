@@ -615,9 +615,12 @@ export function ChatPanel() {
     const snapshot = cloneCanvasSnapshot()
 
     try {
-      // Full canvas replacement — AI actions describe the complete architecture
-      let workingNodes: CanvasNode[] = []
-      let workingEdges: Edge[] = []
+      // Decide: full replace or incremental
+      // First apply in a session → full replace (AI describes complete architecture)
+      // Subsequent applies → incremental (AI adds/modifies on existing canvas)
+      const hasExistingCanvas = snapshot.nodes.length > 0
+      let workingNodes: CanvasNode[] = hasExistingCanvas ? snapshot.nodes : []
+      let workingEdges: Edge[] = hasExistingCanvas ? snapshot.edges : []
 
       for (const rawAction of rawActions) {
         const parsed = tryRepairJson(rawAction)
