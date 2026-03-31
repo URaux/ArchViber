@@ -611,34 +611,47 @@ export function ChatPanel() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <button
-        type="button"
-        aria-expanded={chatOpen}
-        onClick={() => setChatOpen(!chatOpen)}
-        className={`flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left shadow-sm ${
-          chatOpen ? '' : 'min-h-[3rem] xl:flex-1 xl:flex-col xl:justify-center'
-        }`}
-      >
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-slate-700">
+      {chatOpen ? (
+        <button
+          type="button"
+          aria-expanded={true}
+          onClick={() => setChatOpen(false)}
+          className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left shadow-sm"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-slate-700">
+              {getAgentDisplayName(backend, model)}
+            </span>
+            <span className="text-[10px] text-slate-400">·</span>
+            <span className="text-[10px] text-slate-400">
+              {selectedNode
+                ? selectedNode.data.name || selectedNode.id
+                : (locale === 'zh' ? '全局' : 'Global')}
+            </span>
+            {selectedNode ? (
+              <span className="rounded bg-orange-100 px-1.5 py-0.5 text-[9px] font-medium text-orange-600">
+                {getNodeTypeLabel(selectedNode.type)}
+              </span>
+            ) : null}
+          </div>
+          <span className="text-[10px] text-slate-400">▼</span>
+        </button>
+      ) : (
+        <button
+          type="button"
+          aria-expanded={false}
+          onClick={() => setChatOpen(true)}
+          className="flex h-full w-full flex-col items-center justify-center gap-1 text-slate-400 hover:text-slate-600"
+          title={locale === 'zh' ? '展开对话' : 'Expand chat'}
+        >
+          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+          </svg>
+          <span className="text-[9px] font-medium tracking-wider" style={{ writingMode: 'vertical-rl' }}>
             {getAgentDisplayName(backend, model)}
           </span>
-          <span className="text-[10px] text-slate-400">·</span>
-          <span className="text-[10px] text-slate-400">
-            {selectedNode
-              ? selectedNode.data.name || selectedNode.id
-              : (locale === 'zh' ? '全局' : 'Global')}
-          </span>
-          {selectedNode ? (
-            <span className="rounded bg-orange-100 px-1.5 py-0.5 text-[9px] font-medium text-orange-600">
-              {getNodeTypeLabel(selectedNode.type)}
-            </span>
-          ) : null}
-        </div>
-        <span className="text-[10px] text-slate-400">
-          {chatOpen ? '▼' : '▶'}
-        </span>
-      </button>
+        </button>
+      )}
 
       {chatOpen ? (
         <>
