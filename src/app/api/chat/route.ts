@@ -4,6 +4,7 @@ import { extractAgentText } from '@/lib/agent-output'
 import { buildSystemContext } from '@/lib/context-engine'
 import type { Locale } from '@/lib/i18n'
 import type { SessionPhase } from '@/lib/store'
+import { streamChat } from '@/lib/llm-client'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -38,6 +39,22 @@ function formatHistory(history: ChatMessage[] | undefined) {
   return history
     .map((entry) => `<${entry.role}>\n${entry.content}\n</${entry.role}>`)
     .join('\n\n')
+}
+
+/**
+ * Returns a direct HTTP LLM config from environment variables, if available.
+ * When set, chat bypasses CLI subprocess entirely (no cold start).
+ * Set VIBE_LLM_API_BASE + VIBE_LLM_API_KEY (and optionally VIBE_LLM_MODEL).
+ */
+function getDirectApiConfig(): { apiBase: string; apiKey: string; model: string } | null {
+  const apiBase = process.env.VIBE_LLM_API_BASE
+  const apiKey = process.env.VIBE_LLM_API_KEY
+  if (!apiBase || !apiKey) return null
+  return {
+    apiBase,
+    apiKey,
+    model: process.env.VIBE_LLM_MODEL ?? 'claude-sonnet-4-6',
+  }
 }
 
 function getBackend(backend?: AgentBackend): AgentBackend {
@@ -86,6 +103,53 @@ function stripAnsi(text: string): string {
 
 function encodeEvent(payload: unknown) {
   return new TextEncoder().encode(`data: ${JSON.stringify(payload)}\n\n`)
+}
+
+async function handleDirectApiChat(
+  request: Request,
+  payload: ChatRequest,
+  directConfig: { apiBase: string; apiKey: string; model: string }
+) {
+  const prompt = buildPrompt(payload)
+
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      let closed = false
+
+      const close = () => {
+        if (closed) return
+        closed = true
+        controller.close()
+      }
+
+      const push = (event: unknown) => {
+        if (closed) return
+        controller.enqueue(encodeEvent(event))
+      }
+
+      try {
+        const gen = streamChat('', [{ role: 'user', content: prompt }], directConfig, request.signal)
+        for await (const chunk of gen) {
+          push({ type: 'chunk', text: chunk })
+        }
+        push({ type: 'done' })
+      } catch (err) {
+        if (err instanceof Error && err.name !== 'AbortError') {
+          push({ type: 'error', error: `Direct API error: ${err.message}` })
+        }
+      } finally {
+        close()
+      }
+    },
+  })
+
+  return new Response(stream, {
+    headers: {
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'Content-Type': 'text/event-stream',
+    },
+  })
 }
 
 async function handleCustomApiChat(request: Request, payload: ChatRequest) {
@@ -205,6 +269,14 @@ export async function POST(request: Request) {
   }
 
   const backend = getBackend(payload.backend)
+
+  // Fast path: if VIBE_LLM_* env vars are set, use direct HTTP (no CLI subprocess, no cold start).
+  // This takes priority over CLI backends but NOT over an explicitly chosen custom-api backend
+  // (which may have its own base URL / key from the UI).
+  const directConfig = backend !== 'custom-api' ? getDirectApiConfig() : null
+  if (directConfig) {
+    return handleDirectApiChat(request, payload, directConfig)
+  }
 
   if (backend === 'custom-api') {
     return handleCustomApiChat(request, payload)

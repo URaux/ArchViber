@@ -5,6 +5,21 @@ import { useAppStore } from '@/lib/store'
 import type { BuildStatus, BuildSummary, BuildAttempt } from '@/lib/types'
 import { getDownstreamDependents } from '@/lib/topo-sort'
 
+/** Mirror of the slug logic in useBuildActions — must stay in sync. */
+function toProjectSlug(name: string): string {
+  return (
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9\u4e00-\u9fff-]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '') || 'untitled'
+  )
+}
+
+function getProjectWorkDir(workDir: string, projectName: string): string {
+  return `${workDir}/${toProjectSlug(projectName)}`
+}
+
 interface StatusMessage {
   type: 'status'
   nodeId: string
@@ -39,6 +54,35 @@ function getLatestLine(text: string) {
 }
 
 export function useAgentStatus() {
+  // On mount, restore BuildSummaries persisted from a previous session (Memory L1).
+  useEffect(() => {
+    const store = useAppStore.getState()
+    const workDir = getProjectWorkDir(store.config.workDir, store.projectName)
+
+    void fetch('/api/project/memory/load', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workDir }),
+    })
+      .then((res) => res.json())
+      .then((data: { nodeSummaries: Record<string, BuildSummary> | null }) => {
+        if (!data.nodeSummaries) return
+        const currentStore = useAppStore.getState()
+        for (const [nodeId, summary] of Object.entries(data.nodeSummaries)) {
+          const node = currentStore.nodes.find((n) => n.id === nodeId)
+          if (!node || node.type !== 'block') continue
+          const existing = (node.data as import('@/lib/types').BlockNodeData).buildSummary
+          // Only restore if the node doesn't already have a summary (don't overwrite live data)
+          if (!existing) {
+            currentStore.updateNodeData(nodeId, { buildSummary: summary })
+          }
+        }
+      })
+      .catch(() => {
+        // Non-fatal — memory restoration is best-effort
+      })
+  }, [])
+
   // On mount, check server-side build progress to restore state after page refresh.
   // If a build was in progress when the user refreshed, the SSE connection dropped
   // but the server may still have the last-known state.
@@ -198,6 +242,22 @@ export function useAgentStatus() {
           buildSummary: summary,
           buildHistory: nextHistory,
         })
+
+        // Persist BuildSummary to memory.json (Memory L1 — fire and forget)
+        const currentStore = useAppStore.getState()
+        const workDir = getProjectWorkDir(currentStore.config.workDir, currentStore.projectName)
+        fetch('/api/project/memory/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            workDir,
+            projectName: currentStore.projectName,
+            nodeSummaries: { [nodeId]: summary },
+          }),
+        }).catch(() => {
+          // Non-fatal — persistence is best-effort
+        })
+
         return
       }
     }
