@@ -89,17 +89,59 @@ export function ExportMenu() {
 
   async function handleExportPng() {
     close()
-    const el = document.querySelector('.react-flow') as HTMLElement | null
-    if (!el) return
+    const state = useAppStore.getState()
+
+    // Target just the viewport (nodes + edges), not controls/minimap
+    const viewport = document.querySelector('.react-flow__viewport') as HTMLElement | null
+    if (!viewport) return
+
+    // Hide UI overlays temporarily
+    const controls = document.querySelector('.react-flow__controls') as HTMLElement | null
+    const minimap = document.querySelector('.react-flow__minimap') as HTMLElement | null
+    const attribution = document.querySelector('.react-flow__attribution') as HTMLElement | null
+    if (controls) controls.style.display = 'none'
+    if (minimap) minimap.style.display = 'none'
+    if (attribution) attribution.style.display = 'none'
+
     try {
-      const dataUrl = await toPng(el, { backgroundColor: '#f9fafb' })
+      // Get bounding rect of all nodes for proper sizing
+      const nodeEls = viewport.querySelectorAll('.react-flow__node')
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+      nodeEls.forEach((el) => {
+        const r = el.getBoundingClientRect()
+        const vr = viewport.getBoundingClientRect()
+        const x = r.left - vr.left
+        const y = r.top - vr.top
+        minX = Math.min(minX, x)
+        minY = Math.min(minY, y)
+        maxX = Math.max(maxX, x + r.width)
+        maxY = Math.max(maxY, y + r.height)
+      })
+
+      const padding = 60
+      const width = maxX - minX + padding * 2
+      const height = maxY - minY + padding * 2
+
+      const dataUrl = await toPng(viewport, {
+        backgroundColor: '#ffffff',
+        width: Math.max(width, 400),
+        height: Math.max(height, 300),
+        style: {
+          transform: `translate(${-minX + padding}px, ${-minY + padding}px)`,
+        },
+      })
+
       const a = document.createElement('a')
-      const state = useAppStore.getState()
       a.href = dataUrl
       a.download = `${state.projectName}.png`
       a.click()
     } catch {
       // Silent fail — canvas may be empty
+    } finally {
+      // Restore UI overlays
+      if (controls) controls.style.display = ''
+      if (minimap) minimap.style.display = ''
+      if (attribution) attribution.style.display = ''
     }
   }
 
