@@ -10,7 +10,6 @@ import { ChatSidebar } from '@/components/ChatSidebar'
 import { ExportMenu } from '@/components/ExportMenu'
 import { ImportDialog } from '@/components/ImportDialog'
 import { NodePalette } from '@/components/NodePalette'
-import { ProgressWidget } from '@/components/ProgressWidget'
 import { SettingsDialog } from '@/components/SettingsDialog'
 import { StatusBar } from '@/components/StatusBar'
 import { useAgentStatus } from '@/hooks/useAgentStatus'
@@ -108,7 +107,6 @@ export default function Home() {
         <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
         <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
         <StatusBar onOpenSettings={() => setSettingsOpen(true)} />
-        <ProgressWidget />
         <BuildDrawer />
       </main>
     </ReactFlowProvider>

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { t } from '@/lib/i18n'
 import { useAppStore } from '@/lib/store'
 import { getAgentBackendLabel } from '@/lib/ui-text'
+import { ProgressWidget } from './ProgressWidget'
 
 interface StatusBarProps {
   onOpenSettings: () => void
@@ -67,6 +68,7 @@ export function StatusBar({ onOpenSettings }: StatusBarProps) {
         </span>
       </div>
       <div className="flex flex-wrap items-center gap-4 text-xs uppercase tracking-[0.2em] text-slate-500">
+        <ProgressWidget />
         <span>{getBuildLabel(buildState.active, buildState.currentWave, buildState.totalWaves)}</span>
         <span>
           {t('agent_backend')} {getAgentBackendLabel(backend)}

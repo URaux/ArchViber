@@ -91,10 +91,10 @@ export function ProgressWidget() {
   return (
     <div
       ref={panelRef}
-      className="fixed bottom-12 left-4 z-40"
+      className="relative"
     >
       {expanded ? (
-        <div className="w-80 rounded-2xl border border-slate-200/80 bg-white shadow-lg">
+        <div className="absolute bottom-full left-0 mb-2 w-80 rounded-2xl border border-slate-200/80 bg-white shadow-lg">
           {/* Header */}
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
             <span className="text-sm font-semibold text-slate-800">{t('project_progress')}</span>
