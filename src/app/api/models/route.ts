@@ -24,6 +24,7 @@ const FALLBACK_MODELS: Record<AgentBackendType, string[]> = {
     'gemini-2.5-flash',
     'gemini-2.5-flash-lite',
   ],
+  'custom-api': [],
 }
 
 async function fetchOpenAIModels(baseUrl: string, apiKey: string): Promise<string[]> {

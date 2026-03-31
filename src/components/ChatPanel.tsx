@@ -257,6 +257,9 @@ export function ChatPanel() {
   const projectName = useAppStore((state) => state.projectName)
   const backend = useAppStore((state) => state.config.agent)
   const model = useAppStore((state) => state.config.model)
+  const customApiBase = useAppStore((state) => state.config.customApiBase)
+  const customApiKey = useAppStore((state) => state.config.customApiKey)
+  const customApiModel = useAppStore((state) => state.config.customApiModel)
   const locale = useAppStore((state) => state.locale)
   const selectedNodeId = useAppStore((state) => state.selectedNodeId)
   const chatOpen = useAppStore((state) => state.chatOpen)
@@ -408,6 +411,9 @@ export function ChatPanel() {
             useAppStore.getState().nodes,
             useAppStore.getState().buildOutputLog
           ) ?? undefined,
+          customApiBase,
+          customApiKey,
+          customApiModel,
         }),
       })
 
@@ -464,39 +470,32 @@ export function ChatPanel() {
           useAppStore.getState().setSessionPhase(sessionId, 'iterate')
         }
       }
-      // Auto-generate session title + project name from AI response (no extra API call)
+      // Auto-generate session title + project name from AI response
       const sid = sessionId
       const existingTitle = useAppStore.getState().chatSessions.find((s) => s.id === sid)?.title
       if (!existingTitle) {
-        const visibleText = extractVisibleChatText(fullAssistantText)
-        if (visibleText.trim()) {
-          // Extract title from response: first heading, first bold text, or first sentence
-          let autoTitle = ''
+        // Try to extract <!-- title: xxx --> from AI response (injected by prompt)
+        const titleTagMatch = fullAssistantText.match(/<!--\s*title:\s*(.+?)\s*-->/)
+        let autoTitle = titleTagMatch?.[1]?.trim() ?? ''
+
+        // Fallback: first heading, bold text, or first sentence
+        if (!autoTitle) {
+          const visibleText = extractVisibleChatText(fullAssistantText)
           const headingMatch = visibleText.match(/^#+\s+(.+)/m)
           const boldMatch = visibleText.match(/\*\*(.+?)\*\*/)
-          const firstLine = visibleText.split('\n').find((l) => l.trim() && !l.startsWith('#') && !l.startsWith('-'))?.trim()
+          if (headingMatch) autoTitle = headingMatch[1].trim()
+          else if (boldMatch) autoTitle = boldMatch[1].trim()
+          else autoTitle = trimmedMessage.slice(0, 25)
+        }
 
-          if (headingMatch) {
-            autoTitle = headingMatch[1].trim()
-          } else if (boldMatch) {
-            autoTitle = boldMatch[1].trim()
-          } else if (firstLine) {
-            autoTitle = firstLine.slice(0, 30)
-          }
+        autoTitle = autoTitle.replace(/[*#`]/g, '').trim().slice(0, 20)
 
-          // Fallback to user message
-          if (!autoTitle) autoTitle = trimmedMessage.slice(0, 25)
-
-          // Clean up
-          autoTitle = autoTitle.replace(/[*#`]/g, '').trim().slice(0, 20)
-
-          if (autoTitle) {
-            useAppStore.getState().renameChatSession(sid, autoTitle)
-            const store = useAppStore.getState()
-            const untitled = t('untitled')
-            if (store.projectName === untitled) {
-              store.setProjectName(autoTitle)
-            }
+        if (autoTitle) {
+          useAppStore.getState().renameChatSession(sid, autoTitle)
+          const store = useAppStore.getState()
+          const untitled = t('untitled')
+          if (store.projectName === untitled) {
+            store.setProjectName(autoTitle)
           }
         }
       }
@@ -550,6 +549,9 @@ export function ChatPanel() {
             useAppStore.getState().nodes,
             useAppStore.getState().buildOutputLog
           ) ?? undefined,
+          customApiBase,
+          customApiKey,
+          customApiModel,
         }),
       })
 

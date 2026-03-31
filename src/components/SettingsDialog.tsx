@@ -463,7 +463,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                   <option value={model}>{model}</option>
                 )}
               </select>
-            </label>
+            </label>}
 
             <label className="block">
               <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">

@@ -75,6 +75,7 @@ const backendLabels: Record<ProjectConfig['agent'], string> = {
   'claude-code': 'Claude Code',
   codex: 'Codex',
   gemini: 'Gemini',
+  'custom-api': 'Custom API',
 }
 
 export function getAgentBackendLabel(backend: ProjectConfig['agent']) {

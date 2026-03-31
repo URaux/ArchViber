@@ -1,4 +1,4 @@
-import type { AgentBackend } from '@/lib/agent-runner'
+import type { AgentBackend, CustomApiConfig } from '@/lib/agent-runner'
 import { agentRunner } from '@/lib/agent-runner-instance'
 import { extractAgentText } from '@/lib/agent-output'
 import { buildSystemContext } from '@/lib/context-engine'
@@ -25,6 +25,9 @@ interface ChatRequest {
   model?: string
   locale?: Locale
   phase?: SessionPhase
+  customApiBase?: string
+  customApiKey?: string
+  customApiModel?: string
 }
 
 function formatHistory(history: ChatMessage[] | undefined) {
@@ -38,7 +41,7 @@ function formatHistory(history: ChatMessage[] | undefined) {
 }
 
 function getBackend(backend?: AgentBackend): AgentBackend {
-  if (backend === 'codex' || backend === 'claude-code' || backend === 'gemini') {
+  if (backend === 'codex' || backend === 'claude-code' || backend === 'gemini' || backend === 'custom-api') {
     return backend
   }
 
@@ -85,6 +88,115 @@ function encodeEvent(payload: unknown) {
   return new TextEncoder().encode(`data: ${JSON.stringify(payload)}\n\n`)
 }
 
+async function handleCustomApiChat(request: Request, payload: ChatRequest) {
+  const apiBase = (payload.customApiBase ?? '').replace(/\/$/, '')
+  const apiKey = payload.customApiKey ?? ''
+  const apiModel = payload.customApiModel || payload.model || 'gpt-4o'
+  const prompt = buildPrompt(payload)
+
+  if (!apiBase || !apiKey) {
+    return Response.json({ error: 'Custom API base URL and key are required.' }, { status: 400 })
+  }
+
+  let upstreamResponse: Response
+  try {
+    upstreamResponse = await fetch(`${apiBase}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: apiModel,
+        messages: [{ role: 'user', content: prompt }],
+        stream: true,
+      }),
+      signal: request.signal,
+    })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    return Response.json({ error: `Custom API request failed: ${msg}` }, { status: 502 })
+  }
+
+  if (!upstreamResponse.ok) {
+    const errText = await upstreamResponse.text().catch(() => `HTTP ${upstreamResponse.status}`)
+    return Response.json({ error: `Custom API error: ${errText.slice(0, 300)}` }, { status: 502 })
+  }
+
+  const reader = upstreamResponse.body?.getReader()
+  if (!reader) {
+    return Response.json({ error: 'No response body from custom API.' }, { status: 502 })
+  }
+
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let closed = false
+
+      const close = () => {
+        if (closed) return
+        closed = true
+        controller.close()
+      }
+
+      const push = (event: unknown) => {
+        if (closed) return
+        controller.enqueue(encodeEvent(event))
+      }
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() ?? ''
+
+          for (const line of lines) {
+            const trimmed = line.trim()
+            if (!trimmed.startsWith('data:')) continue
+            const data = trimmed.slice(5).trim()
+            if (data === '[DONE]') continue
+
+            try {
+              const parsed = JSON.parse(data) as {
+                choices?: Array<{ delta?: { content?: string }; finish_reason?: string }>
+              }
+              const delta = parsed.choices?.[0]?.delta?.content
+              if (delta) {
+                push({ type: 'chunk', text: delta })
+              }
+            } catch {
+              // ignore malformed SSE lines
+            }
+          }
+        }
+
+        push({ type: 'done' })
+      } catch (err) {
+        if (err instanceof Error && err.name !== 'AbortError') {
+          push({ type: 'error', error: `Stream error: ${err.message}` })
+        }
+      } finally {
+        close()
+      }
+    },
+    cancel() {
+      reader.cancel().catch(() => undefined)
+    },
+  })
+
+  return new Response(stream, {
+    headers: {
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'Content-Type': 'text/event-stream',
+    },
+  })
+}
+
 export async function POST(request: Request) {
   const payload = (await request.json()) as ChatRequest
 
@@ -92,10 +204,16 @@ export async function POST(request: Request) {
     return Response.json({ error: 'Message cannot be empty.' }, { status: 400 })
   }
 
+  const backend = getBackend(payload.backend)
+
+  if (backend === 'custom-api') {
+    return handleCustomApiChat(request, payload)
+  }
+
   const agentId = agentRunner.spawnAgent(
     'chat',
     buildPrompt(payload),
-    getBackend(payload.backend),
+    backend,
     process.cwd(),
     payload.model
   )

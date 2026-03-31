@@ -60,6 +60,12 @@ function getGeminiWindowsScriptPath() {
   )
 }
 
+export interface CustomApiConfig {
+  customApiBase: string
+  customApiKey: string
+  customApiModel?: string
+}
+
 function getCommand(backend: AgentBackend, prompt: string, model?: string) {
   if (backend === 'codex') {
     const args = ['exec', '--full-auto', '--json', '-']
@@ -99,8 +105,13 @@ export class AgentRunner extends EventEmitter {
     this.on('error', () => undefined)
   }
 
-  spawnAgent(nodeId: string, prompt: string, backend: AgentBackend, workDir: string, model?: string) {
+  spawnAgent(nodeId: string, prompt: string, backend: AgentBackend, workDir: string, model?: string, customApiConfig?: CustomApiConfig) {
     const agentId = `${nodeId}-${Date.now()}-${this.nextId++}`
+
+    if (backend === 'custom-api') {
+      return this.spawnCustomApiAgent(agentId, nodeId, prompt, model, customApiConfig)
+    }
+
     const { command, args, pipeStdin, useShell } = getCommand(backend, prompt, model)
     const env = { ...process.env }
 
@@ -187,6 +198,106 @@ export class AgentRunner extends EventEmitter {
     return agentId
   }
 
+  private spawnCustomApiAgent(agentId: string, nodeId: string, prompt: string, model?: string, cfg?: CustomApiConfig) {
+    const apiBase = cfg?.customApiBase?.replace(/\/$/, '') ?? ''
+    const apiKey = cfg?.customApiKey ?? ''
+    const apiModel = cfg?.customApiModel || model || 'gpt-4o'
+
+    const info: AgentProcessInfo = {
+      agentId,
+      nodeId,
+      prompt,
+      backend: 'custom-api',
+      workDir: '',
+      status: 'running',
+      output: '',
+    }
+
+    // Fake process that allows stopAgent to cancel via AbortController
+    const abortController = new AbortController()
+    const fakeProcess: SpawnedProcess = {
+      kill: () => abortController.abort(),
+      once: () => this as unknown as EventEmitter,
+    }
+
+    this.agents.set(agentId, { info, process: fakeProcess })
+    this.emit('status', { agentId, nodeId, status: 'running' satisfies AgentStatus })
+
+    const doFetch = async () => {
+      try {
+        const response = await fetch(`${apiBase}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: apiModel,
+            messages: [{ role: 'user', content: prompt }],
+            stream: true,
+          }),
+          signal: abortController.signal,
+        })
+
+        if (!response.ok) {
+          const errText = await response.text().catch(() => `HTTP ${response.status}`)
+          this.finishAgent(agentId, 'error', null, errText.slice(0, 500))
+          return
+        }
+
+        const reader = response.body?.getReader()
+        if (!reader) {
+          this.finishAgent(agentId, 'error', null, 'No response body')
+          return
+        }
+
+        const decoder = new TextDecoder()
+        let buffer = ''
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() ?? ''
+
+          for (const line of lines) {
+            const trimmed = line.trim()
+            if (!trimmed.startsWith('data:')) continue
+            const data = trimmed.slice(5).trim()
+            if (data === '[DONE]') continue
+
+            try {
+              const parsed = JSON.parse(data) as {
+                choices?: Array<{ delta?: { content?: string }; finish_reason?: string }>
+              }
+              const delta = parsed.choices?.[0]?.delta?.content
+              if (delta) {
+                info.output += delta
+                this.emit('output', { agentId, nodeId, text: delta })
+              }
+            } catch {
+              // ignore malformed SSE lines
+            }
+          }
+        }
+
+        this.finishAgent(agentId, 'done', 0)
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name === 'AbortError') {
+          this.finishAgent(agentId, 'error', null, 'Stopped by user')
+        } else {
+          const msg = err instanceof Error ? err.message : String(err)
+          this.finishAgent(agentId, 'error', null, msg)
+        }
+      }
+    }
+
+    void doFetch()
+    return agentId
+  }
+
   getStatus(agentId: string) {
     const record = this.agents.get(agentId)
 
@@ -214,7 +325,8 @@ export class AgentRunner extends EventEmitter {
     backend: AgentBackend,
     workDir: string,
     maxParallel: number,
-    model?: string
+    model?: string,
+    customApiConfig?: CustomApiConfig
   ) {
     // Concurrency model:
     // - Nodes in the same wave have no mutual dependencies (topo sort guarantees this)
@@ -231,7 +343,7 @@ export class AgentRunner extends EventEmitter {
       for (let index = 0; index < wave.length; index += concurrency) {
         const batch = wave.slice(index, index + concurrency)
         const agentIds = batch.map((nodeId) =>
-          this.spawnAgent(nodeId, prompts.get(nodeId) ?? '', backend, workDir, model)
+          this.spawnAgent(nodeId, prompts.get(nodeId) ?? '', backend, workDir, model, customApiConfig)
         )
 
         await Promise.all(agentIds.map((agentId) => this.waitForAgent(agentId)))

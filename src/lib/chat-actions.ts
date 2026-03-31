@@ -84,5 +84,6 @@ export function extractVisibleChatText(content: string) {
     }
   }
 
-  return dedupeRepeatedResponse(visible)
+  // Strip hidden title tags before returning
+  return dedupeRepeatedResponse(visible).replace(/<!--\s*title:\s*.+?\s*-->/g, '').trim()
 }
