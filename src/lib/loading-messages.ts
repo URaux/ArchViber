@@ -25,15 +25,49 @@ const MESSAGES_ZH = [
   "正在翻译人类的需求为机器语言...",
 ]
 
+const IMPORT_MESSAGES_EN = [
+  "Scanning the project structure...",
+  "Reading every file like a detective novel...",
+  "Mapping the dependency labyrinth...",
+  "Reverse-engineering your architecture...",
+  "Cataloguing components and connections...",
+  "Untangling the spaghetti...",
+  "Decoding the developer's intent...",
+  "Interviewing the source code...",
+]
+
+const IMPORT_MESSAGES_ZH = [
+  "正在扫描项目结构...",
+  "正在像侦探一样阅读每个文件...",
+  "正在绘制依赖迷宫地图...",
+  "正在逆向工程你的架构...",
+  "正在审讯源代码...",
+  "正在理清意大利面条式的代码...",
+]
+
 let lastIndex = -1
+let lastImportIndex = -1
+
+function pickRandom(pool: string[], lastIdx: number): { index: number; message: string } {
+  let index: number
+  do {
+    index = Math.floor(Math.random() * pool.length)
+  } while (index === lastIdx && pool.length > 1)
+  return { index, message: pool[index] }
+}
 
 export function getRandomLoadingMessage(): string {
   const locale = getLocale()
   const pool = locale === 'zh' ? MESSAGES_ZH : MESSAGES_EN
-  let index: number
-  do {
-    index = Math.floor(Math.random() * pool.length)
-  } while (index === lastIndex && pool.length > 1)
-  lastIndex = index
-  return pool[index]
+  const result = pickRandom(pool, lastIndex)
+  lastIndex = result.index
+  return result.message
+}
+
+export function getRandomImportMessage(): string {
+  const locale = getLocale()
+  const pool = locale === 'zh' ? IMPORT_MESSAGES_ZH : IMPORT_MESSAGES_EN
+  const result = pickRandom(pool, lastImportIndex)
+  lastImportIndex = result.index
+  return result.message
 }

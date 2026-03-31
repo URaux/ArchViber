@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Edge, Node } from '@xyflow/react'
 import { layoutArchitectureCanvas } from '@/lib/graph-layout'
 import { canvasToYaml } from '@/lib/schema-engine'
+import { getRandomImportMessage } from '@/lib/loading-messages'
 import { t } from '@/lib/i18n'
 import { useAppStore } from '@/lib/store'
 import type { CanvasNodeData } from '@/lib/types'
@@ -35,6 +36,23 @@ export function ImportDialog({ open, onClose }: ImportDialogProps) {
   const [error, setError] = useState<string | null>(null)
   const [progress, setProgress] = useState<string | null>(null)
   const [isImporting, setIsImporting] = useState(false)
+  const [loadingMsg, setLoadingMsg] = useState('')
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    if (isImporting) {
+      setLoadingMsg(getRandomImportMessage())
+      intervalRef.current = setInterval(() => {
+        setLoadingMsg(getRandomImportMessage())
+      }, 4000)
+    } else {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+      intervalRef.current = null
+    }
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+    }
+  }, [isImporting])
 
   async function handleImport(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -76,10 +94,13 @@ export function ImportDialog({ open, onClose }: ImportDialogProps) {
       // Auto-create a chat session and spawn an intro overview
       const sessionId = createChatSession()
       const yaml = canvasToYaml(arranged.nodes, arranged.edges, importedProjectName)
-      const introPrompt = `I just imported a codebase from "${trimmedDir}". Here is the generated architecture:\n\n${yaml}\n\nPlease give me a brief overview of this architecture — what are the main components, how they connect, and any observations about the design. Point out anything that looks incomplete or could be improved. Keep it concise. If you see issues with the generated architecture (missing components, wrong relationships), suggest canvas actions to fix them.`
+      const isZh = locale === 'zh'
+      const introPrompt = isZh
+        ? `我刚导入了 "${trimmedDir}" 的代码库。生成的架构如下：\n\n${yaml}\n\n请用中文做一个项目总览：\n1. 用一句话概括这个项目是做什么的\n2. 列出核心模块（3-5个）及它们各自的职责\n3. 描述模块之间的关键数据流\n4. 指出架构中的亮点和潜在问题\n5. 如果架构图有缺失或错误，用 canvas action 修复\n\n语气像一个资深架构师在做 code review，简洁有力。`
+        : `I just imported a codebase from "${trimmedDir}". Here is the generated architecture:\n\n${yaml}\n\nPlease provide a project overview:\n1. One-sentence summary of what this project does\n2. Core modules (3-5) and their responsibilities\n3. Key data flows between modules\n4. Architecture highlights and potential issues\n5. If the generated architecture has gaps or errors, suggest canvas actions to fix them\n\nBe concise and opinionated, like a senior architect doing a code review.`
 
       updateActiveChatMessages(() => [
-        { role: 'user' as const, content: `导入项目: ${trimmedDir}` },
+        { role: 'user' as const, content: isZh ? `导入项目: ${trimmedDir}` : `Import project: ${trimmedDir}` },
         { role: 'assistant' as const, content: '' },
       ])
       setChatOpen(true)
@@ -175,7 +196,13 @@ export function ImportDialog({ open, onClose }: ImportDialogProps) {
 
           {progress ? (
             <div className="rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-700">
-              {progress}
+              <div className="flex items-center gap-2">
+                <span className="vp-spinner" />
+                <span>{progress}</span>
+              </div>
+              {isImporting && loadingMsg ? (
+                <div className="mt-2 text-xs italic text-orange-500">{loadingMsg}</div>
+              ) : null}
             </div>
           ) : null}
 
