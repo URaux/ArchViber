@@ -16,6 +16,14 @@ export function assignHandles(
 
   if (sameContainer) {
     const deltaX = targetNode.position.x - sourceNode.position.x
+    const deltaY = targetNode.position.y - sourceNode.position.y
+
+    // Pick the axis with the larger delta — this makes vertical chains use top/bottom
+    if (Math.abs(deltaY) > Math.abs(deltaX)) {
+      return deltaY >= 0
+        ? { sourceHandle: 's-bottom', targetHandle: 't-top' }
+        : { sourceHandle: 's-top', targetHandle: 't-bottom' }
+    }
 
     return deltaX >= 0
       ? { sourceHandle: 's-right', targetHandle: 't-left' }

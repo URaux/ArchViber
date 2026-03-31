@@ -68,7 +68,7 @@ export async function layoutArchitectureCanvas(
             ),
       layoutOptions: {
         'elk.algorithm': 'layered',
-        'elk.direction': 'RIGHT',
+        'elk.direction': 'DOWN',
         'elk.edgeRouting': 'ORTHOGONAL',
         'elk.padding': `[top=${CONTAINER_PADDING},left=${CONTAINER_SIDE_PADDING},bottom=${CONTAINER_SIDE_PADDING},right=${CONTAINER_SIDE_PADDING}]`,
         'elk.spacing.nodeNode': '40',
