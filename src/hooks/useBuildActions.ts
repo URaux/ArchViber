@@ -87,7 +87,12 @@ export function useBuildActions() {
         return
       }
 
-      const waves = topoSort(scopedBlocks, scopedCanvas.edges)
+      let waves: string[][]
+      try {
+        waves = topoSort(scopedBlocks, scopedCanvas.edges)
+      } catch {
+        waves = [scopedBlocks.map((n) => n.id)]
+      }
       const nodeNames = new Map(scopedBlocks.map((node) => [node.id, node.data.name || node.id]))
       const waveSummary = buildWaveSummary(waves, nodeNames)
       const scopeLabel = mode === 'selected' ? 'selected subgraph' : 'full project'
