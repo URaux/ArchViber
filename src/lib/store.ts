@@ -383,10 +383,20 @@ export const useAppStore = create<AppState>((set, get) => ({
         ? crypto.randomUUID()
         : `session-${Date.now()}`
     const now = Date.now()
+    const { activeChatSessionId, chatSessions, nodes, edges } = get()
+    // Save current canvas to the session we're leaving
+    const updatedSessions = chatSessions.map((s) =>
+      s.id === activeChatSessionId
+        ? { ...s, canvasSnapshot: { nodes, edges } }
+        : s
+    )
     const session: ChatSession = { id, title: '', messages: [], createdAt: now, updatedAt: now }
     set({
-      chatSessions: [session, ...get().chatSessions],
+      chatSessions: [session, ...updatedSessions],
       activeChatSessionId: id,
+      // New session starts with empty canvas
+      nodes: [],
+      edges: [],
     })
     return id
   },
@@ -398,18 +408,14 @@ export const useAppStore = create<AppState>((set, get) => ({
         ? { ...s, canvasSnapshot: { nodes, edges } }
         : s
     )
-    // Restore canvas from the session we're switching to
+    // Restore canvas from the session we're switching to (empty if no snapshot)
     const target = updated.find((s) => s.id === id)
-    if (target?.canvasSnapshot) {
-      set({
-        chatSessions: updated,
-        activeChatSessionId: id,
-        nodes: target.canvasSnapshot.nodes,
-        edges: target.canvasSnapshot.edges,
-      })
-    } else {
-      set({ chatSessions: updated, activeChatSessionId: id })
-    }
+    set({
+      chatSessions: updated,
+      activeChatSessionId: id,
+      nodes: target?.canvasSnapshot?.nodes ?? [],
+      edges: target?.canvasSnapshot?.edges ?? [],
+    })
   },
   deleteChatSession: (id) => {
     const remaining = get().chatSessions.filter((s) => s.id !== id)
