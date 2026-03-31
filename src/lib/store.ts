@@ -13,6 +13,7 @@ import { clampMaxParallel } from './config'
 import { assignHandles } from './edge-utils'
 import { getLocale, setLocale as setI18nLocale, translate, type Locale } from './i18n'
 import type { BuildStatus, CanvasNodeData, HistoryEntry, ProjectConfig } from './types'
+import { cloneCanvas } from './canvas-utils'
 
 type SaveState = 'saved' | 'saving'
 
@@ -155,13 +156,6 @@ function saveChatSessions(sessions: ChatSession[]) {
 // Track whether a node drag is in progress so we snapshot once on drag start
 let _isDragging = false
 
-function cloneSnapshot(nodes: Node<CanvasNodeData>[], edges: Edge[]) {
-  return {
-    nodes: nodes.map((n) => ({ ...n, position: { ...n.position }, data: { ...n.data }, ...(n.style ? { style: { ...n.style } } : {}) })),
-    edges: edges.map((e) => ({ ...e })),
-  }
-}
-
 export const useAppStore = create<AppState>((set, get) => ({
   nodes: [],
   edges: [],
@@ -170,7 +164,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   canvasRedoStack: [],
   pushCanvasSnapshot: () => {
     const { nodes, edges, canvasUndoStack } = get()
-    const stack = [...canvasUndoStack, cloneSnapshot(nodes, edges)].slice(-50)
+    const stack = [...canvasUndoStack, cloneCanvas(nodes, edges)].slice(-50)
     set({ canvasUndoStack: stack, canvasRedoStack: [] })
   },
   undo: () => {
@@ -181,7 +175,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       nodes: previous.nodes,
       edges: previous.edges,
       canvasUndoStack: canvasUndoStack.slice(0, -1),
-      canvasRedoStack: [...canvasRedoStack, cloneSnapshot(nodes, edges)],
+      canvasRedoStack: [...canvasRedoStack, cloneCanvas(nodes, edges)],
     })
   },
   redo: () => {
@@ -192,7 +186,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       nodes: next.nodes,
       edges: next.edges,
       canvasRedoStack: canvasRedoStack.slice(0, -1),
-      canvasUndoStack: [...canvasUndoStack, cloneSnapshot(nodes, edges)],
+      canvasUndoStack: [...canvasUndoStack, cloneCanvas(nodes, edges)],
     })
   },
   onNodesChange: (changes) => {

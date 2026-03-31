@@ -1,3 +1,5 @@
+import React from 'react'
+
 /**
  * Container-aware edge routing for cross-container edges.
  *
@@ -8,6 +10,8 @@
  *
  * Corners are rounded with SVG quadratic bezier (Q command).
  */
+
+export type NodeMapEntry = { position: { x: number; y: number }; style?: React.CSSProperties }
 
 export interface ContainerBox {
   x: number
@@ -20,6 +24,19 @@ export interface RouteResult {
   path: string
   labelX: number
   labelY: number
+}
+
+export function getContainerBox(
+  nodeId: string | undefined,
+  nodeMap: Map<string, NodeMapEntry>
+): ContainerBox | null {
+  if (!nodeId) return null
+  const node = nodeMap.get(nodeId)
+  if (!node) return null
+  const w = typeof node.style?.width === 'number' ? node.style.width : 0
+  const h = typeof node.style?.height === 'number' ? node.style.height : 0
+  if (w === 0 || h === 0) return null
+  return { x: node.position.x, y: node.position.y, width: w, height: h }
 }
 
 type Side = 'top' | 'bottom' | 'left' | 'right'

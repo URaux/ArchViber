@@ -1,5 +1,6 @@
 import type { Edge, Node } from '@xyflow/react'
 import type { CanvasNodeData } from './types'
+import { BLOCK_WIDTH, BLOCK_HEIGHT } from './graph-layout'
 
 /**
  * Given two block nodes, return the most suitable source/target handles for the edge.
@@ -43,7 +44,7 @@ export function assignHandles(
         y += parent.position.y
       }
     }
-    return { x: x + 100, y: y + 50 }
+    return { x: x + BLOCK_WIDTH / 2, y: y + BLOCK_HEIGHT / 2 }
   }
 
   const srcCenter = absoluteCenter(sourceNode)

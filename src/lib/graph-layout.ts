@@ -5,6 +5,7 @@ import ELK, {
 import type { Edge, Node } from '@xyflow/react'
 import { assignAllEdgeHandles } from '@/lib/edge-utils'
 import type { CanvasNodeData, ContainerNodeData } from '@/lib/types'
+import { cloneNode, cloneEdge } from '@/lib/canvas-utils'
 
 const elk = new ELK()
 
@@ -18,23 +19,6 @@ export const COLLAPSED_CONTAINER_HEIGHT = 56
 
 type CanvasNode = Node<CanvasNodeData>
 type CanvasEdge = Edge
-
-function cloneNode(node: CanvasNode): CanvasNode {
-  return {
-    ...node,
-    position: { ...node.position },
-    data: { ...node.data },
-    ...(node.style ? { style: { ...node.style } } : {}),
-  }
-}
-
-function cloneEdge(edge: CanvasEdge): CanvasEdge {
-  return {
-    ...edge,
-    ...(edge.data ? { data: { ...edge.data } } : {}),
-    ...(edge.style ? { style: { ...edge.style } } : {}),
-  }
-}
 
 export async function layoutArchitectureCanvas(
   nodes: CanvasNode[],

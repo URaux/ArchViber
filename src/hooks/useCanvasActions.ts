@@ -1,0 +1,281 @@
+'use client'
+
+import { useState } from 'react'
+import type { Edge, Node } from '@xyflow/react'
+import { t } from '@/lib/i18n'
+import { layoutArchitectureCanvas } from '@/lib/graph-layout'
+import { useAppStore } from '@/lib/store'
+import type { BlockNodeData, CanvasNodeData, ContainerNodeData } from '@/lib/types'
+import {
+  type CanvasAction,
+  VALID_BUILD_STATUSES,
+  VALID_CONTAINER_COLORS,
+  VALID_EDGE_TYPES,
+  VALID_NODE_TYPES,
+  tryRepairJson,
+} from '@/lib/canvas-action-types'
+import { cloneCanvas } from '@/lib/canvas-utils'
+
+type CanvasNode = Node<CanvasNodeData>
+
+function applyActionToSnapshot(
+  action: CanvasAction,
+  currentNodes: CanvasNode[],
+  currentEdges: Edge[]
+): { nodes: CanvasNode[]; edges: Edge[] } {
+  if (action.action === 'add-node') {
+    const node = action.node ?? {}
+    const type = VALID_NODE_TYPES.has(node.type ?? 'block') ? (node.type ?? 'block') : 'block'
+    const id =
+      typeof node.id === 'string' && node.id
+        ? node.id
+        : `${type}-${typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : Date.now()}`
+
+    if (type === 'container') {
+      const data = node.data as Partial<ContainerNodeData> | undefined
+      const colorCandidate =
+        typeof data?.color === 'string'
+          ? data.color
+          : typeof node.color === 'string'
+            ? node.color
+            : 'blue'
+
+      const newNode: CanvasNode = {
+        id,
+        type,
+        position: {
+          x: typeof node.position?.x === 'number' ? node.position.x : 80 + (currentNodes.length % 3) * 280,
+          y: typeof node.position?.y === 'number' ? node.position.y : 80 + Math.floor(currentNodes.length / 3) * 220,
+        },
+        style: {
+          width:
+            typeof node.style === 'object' && node.style && typeof node.style.width === 'number'
+              ? node.style.width
+              : 400,
+          height:
+            typeof node.style === 'object' && node.style && typeof node.style.height === 'number'
+              ? node.style.height
+              : 300,
+        },
+        data: {
+          name:
+            typeof data?.name === 'string'
+              ? data.name
+              : typeof node.name === 'string'
+                ? node.name
+                : id,
+          description:
+            typeof data?.description === 'string'
+              ? data.description
+              : typeof node.description === 'string'
+                ? node.description
+                : '',
+          color: VALID_CONTAINER_COLORS.has(colorCandidate as ContainerNodeData['color'])
+            ? (colorCandidate as ContainerNodeData['color'])
+            : 'blue',
+          collapsed:
+            typeof data?.collapsed === 'boolean'
+              ? data.collapsed
+              : typeof node.collapsed === 'boolean'
+                ? node.collapsed
+                : false,
+        } as CanvasNodeData,
+      }
+      return { nodes: [...currentNodes, newNode], edges: currentEdges }
+    }
+
+    const data = node.data as Partial<BlockNodeData> | undefined
+    const parentId =
+      typeof node.parentId === 'string' &&
+      currentNodes.some((entry) => entry.id === node.parentId && entry.type === 'container')
+        ? node.parentId
+        : undefined
+    const statusCandidate =
+      typeof data?.status === 'string' ? data.status : typeof node.status === 'string' ? node.status : 'idle'
+
+    const newNode: CanvasNode = {
+      id,
+      type,
+      position: {
+        x: typeof node.position?.x === 'number' ? node.position.x : parentId ? 24 : 80 + (currentNodes.length % 3) * 240,
+        y: typeof node.position?.y === 'number' ? node.position.y : parentId ? 72 : 80 + Math.floor(currentNodes.length / 3) * 180,
+      },
+      ...(parentId ? { parentId, extent: 'parent' as const } : {}),
+      data: {
+        name:
+          typeof data?.name === 'string'
+            ? data.name
+            : typeof node.name === 'string'
+              ? node.name
+              : id,
+        description:
+          typeof data?.description === 'string'
+            ? data.description
+            : typeof node.description === 'string'
+              ? node.description
+              : '',
+        status: VALID_BUILD_STATUSES.has(statusCandidate as BlockNodeData['status'])
+          ? (statusCandidate as BlockNodeData['status'])
+          : 'idle',
+        ...(typeof data?.summary === 'string' ? { summary: data.summary } : {}),
+        ...(typeof data?.errorMessage === 'string' ? { errorMessage: data.errorMessage } : {}),
+        ...(typeof data?.techStack === 'string'
+          ? { techStack: data.techStack }
+          : typeof node.techStack === 'string'
+            ? { techStack: node.techStack }
+            : {}),
+      } as CanvasNodeData,
+    }
+    return { nodes: [...currentNodes, newNode], edges: currentEdges }
+  }
+
+  if (action.action === 'update-node') {
+    return {
+      nodes: currentNodes.map((n) =>
+        n.id === action.target_id ? { ...n, data: { ...n.data, ...action.data } } : n
+      ),
+      edges: currentEdges,
+    }
+  }
+
+  if (action.action === 'remove-node') {
+    return {
+      nodes: currentNodes.filter((n) => n.id !== action.target_id),
+      edges: currentEdges.filter(
+        (e) => e.source !== action.target_id && e.target !== action.target_id
+      ),
+    }
+  }
+
+  if (action.action === 'add-edge') {
+    const edge = action.edge
+
+    if (
+      !currentNodes.some((n) => n.id === edge.source) ||
+      !currentNodes.some((n) => n.id === edge.target)
+    ) {
+      // Skip edges referencing non-existent nodes instead of throwing
+      return { nodes: currentNodes, edges: currentEdges }
+    }
+
+    const type = VALID_EDGE_TYPES.has(edge.type ?? 'sync') ? (edge.type ?? 'sync') : 'sync'
+
+    const newEdge: Edge = {
+      id:
+        typeof edge.id === 'string' && edge.id
+          ? edge.id
+          : `edge-${typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : Date.now()}`,
+      source: edge.source,
+      target: edge.target,
+      type,
+      ...(edge.label ? { label: edge.label } : {}),
+    }
+    return { nodes: currentNodes, edges: [...currentEdges, newEdge] }
+  }
+
+  return { nodes: currentNodes, edges: currentEdges }
+}
+
+export function useCanvasActions() {
+  const [actionErrors, setActionErrors] = useState<Record<string, string>>({})
+  const [lastCanvasSnapshot, setLastCanvasSnapshot] = useState<{
+    nodes: CanvasNode[]
+    edges: Edge[]
+  } | null>(null)
+  const [lastAppliedActionKey, setLastAppliedActionKey] = useState<string | null>(null)
+
+  async function applyCanvasActions(rawActions: string[], actionKey: string) {
+    if (rawActions.length === 0) {
+      return
+    }
+
+    // Use getState() to avoid stale closure captures
+    const { nodes, edges } = useAppStore.getState()
+    const snapshot = cloneCanvas(nodes, edges)
+
+    try {
+      const hasExistingCanvas = snapshot.nodes.length > 0
+      let workingNodes: CanvasNode[] = hasExistingCanvas ? snapshot.nodes : []
+      let workingEdges: Edge[] = hasExistingCanvas ? snapshot.edges : []
+
+      for (const rawAction of rawActions) {
+        const parsed = tryRepairJson(rawAction)
+        if (!parsed) {
+          throw new Error('Invalid JSON action block.')
+        }
+
+        const rawList = Array.isArray(parsed) ? parsed : [parsed]
+        // Sort: add-node (containers first, then blocks) → update-node → remove-node → add-edge
+        const actionOrder: Record<string, number> = { 'add-node': 0, 'update-node': 1, 'remove-node': 2, 'add-edge': 3 }
+        const actions = (rawList as CanvasAction[]).sort((a, b) => {
+          const oa = actionOrder[a.action] ?? 1
+          const ob = actionOrder[b.action] ?? 1
+          if (oa !== ob) return oa - ob
+          // Within add-node, containers before blocks
+          if (a.action === 'add-node' && b.action === 'add-node') {
+            const aIsContainer = a.node?.type === 'container' ? 0 : 1
+            const bIsContainer = b.node?.type === 'container' ? 0 : 1
+            return aIsContainer - bIsContainer
+          }
+          return 0
+        })
+        for (const action of actions) {
+          const result = applyActionToSnapshot(action, workingNodes, workingEdges)
+          workingNodes = result.nodes
+          workingEdges = result.edges
+        }
+      }
+
+      // Filter out invalid edges — both endpoints must exist and be block nodes
+      const blockIds = new Set(workingNodes.filter((n) => n.type === 'block').map((n) => n.id))
+      const validEdges = workingEdges.filter(
+        (e) => blockIds.has(e.source) && blockIds.has(e.target)
+      )
+      const arranged = await layoutArchitectureCanvas(workingNodes, validEdges)
+      useAppStore.getState().setCanvas(arranged.nodes, arranged.edges)
+
+      // Save canvas snapshot to current chat session for session switching
+      const { activeChatSessionId, chatSessions } = useAppStore.getState()
+      if (activeChatSessionId) {
+        const updated = chatSessions.map((s) =>
+          s.id === activeChatSessionId
+            ? { ...s, canvasSnapshot: { nodes: arranged.nodes, edges: arranged.edges } }
+            : s
+        )
+        useAppStore.setState({ chatSessions: updated })
+      }
+
+      setLastCanvasSnapshot(snapshot)
+      setLastAppliedActionKey(actionKey)
+      setActionErrors((current) => {
+        const next = { ...current }
+        delete next[actionKey]
+        return next
+      })
+    } catch (applyError) {
+      setActionErrors((current) => ({
+        ...current,
+        [actionKey]:
+          applyError instanceof Error ? applyError.message : t('apply_canvas_failed'),
+      }))
+    }
+  }
+
+  function restorePreviousCanvasVersion(actionKey: string) {
+    if (!lastCanvasSnapshot || lastAppliedActionKey !== actionKey) {
+      return
+    }
+
+    useAppStore.getState().setCanvas(lastCanvasSnapshot.nodes, lastCanvasSnapshot.edges)
+    setLastCanvasSnapshot(null)
+    setLastAppliedActionKey(null)
+  }
+
+  return {
+    applyCanvasActions,
+    restorePreviousCanvasVersion,
+    actionErrors,
+    lastCanvasSnapshot,
+    lastAppliedActionKey,
+  }
+}
