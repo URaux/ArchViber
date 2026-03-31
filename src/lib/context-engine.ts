@@ -317,23 +317,30 @@ export function buildSystemContext(options: ContextOptions): string {
 /**
  * Resolve and merge skills for the given agent context.
  * Maps agent type + task to scope, then delegates to skill-loader.
+ * Only works server-side (skill-loader uses fs).
  */
 export function resolveSkillContent(
   agentType: AgentType,
   task?: TaskType,
   techStack?: string
 ): string | undefined {
-  // Map task to scope: global (full architecture discussions) vs node (specific component)
+  // skill-loader uses 'fs' — only available server-side
+  if (typeof window !== 'undefined') return undefined
+
   const scope: 'global' | 'node' =
     task === 'discuss' || task === 'import' || task === 'import-enhance' || task === 'analyze'
       ? 'global'
       : 'node'
 
-  // Import dynamically to avoid circular dependency at module load time
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { resolveSkillContent: resolve } = require('./skill-loader') as {
-    resolveSkillContent: (agentType: 'canvas' | 'build', scope: 'global' | 'node', techStack?: string) => string | undefined
+  try {
+    // Use eval('require') to prevent the bundler from analyzing this import
+    // and pulling 'fs' into the client bundle
+    // eslint-disable-next-line no-eval
+    const loader = eval("require('./skill-loader')") as {
+      resolveSkillContent: (agentType: 'canvas' | 'build', scope: 'global' | 'node', techStack?: string) => string | undefined
+    }
+    return loader.resolveSkillContent(agentType, scope, techStack)
+  } catch {
+    return undefined
   }
-
-  return resolve(agentType, scope, techStack)
 }
