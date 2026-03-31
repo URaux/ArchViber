@@ -8,6 +8,8 @@ Tell the AI "build me a cross-border e-commerce system with product sourcing, ad
 
 **This is not a diagramming tool.** It's an AI architecture partner: from fuzzy idea to runnable code, entirely conversation-driven.
 
+> **Screenshot/demo coming soon** — see architecture diagrams below for system design.
+
 ---
 
 ## Who is this for?
@@ -34,19 +36,23 @@ Tell the AI "build me a cross-border e-commerce system with product sourcing, ad
 
 ---
 
-## System Architecture
+## Architecture
+
+The system uses a **2-Agent architecture**: a Canvas Agent (read-only, handles conversation and design) and a Build Agent (write-enabled, handles code generation). Each agent receives a precisely scoped context window built from a 7-layer stack, ensuring AI only sees what it needs at each stage.
+
+### System Architecture
 
 ![System Architecture](docs/arch-system.png)
 
-## Build Flow
-
-![Build Flow](docs/arch-build-flow.png)
-
-## Context Engineering
+### Context Engineering
 
 ![Context Engineering](docs/arch-context.png)
 
-## Canvas Model
+### Build Flow
+
+![Build Flow](docs/arch-build-flow.png)
+
+### Canvas Model
 
 ![Canvas Model](docs/arch-canvas-model.png)
 
@@ -56,12 +62,12 @@ Tell the AI "build me a cross-border e-commerce system with product sourcing, ad
 
 | Capability | Why it matters |
 |---|---|
-| **AI brainstorm workflow** | brainstorm → design → iterate — three phases that progressively refine, not one-shot generation |
-| **2-Agent architecture** | Canvas Agent handles design, Build Agent handles construction. 7-layer context stack precisely controls every input layer |
-| **Build progress injected into chat** | Build events auto-stream into the conversation; Chat Agent is aware of build state in real time |
-| **15+ built-in skills + one-click GitHub import** | Skill system auto-matches the best skill by techStack, with post-build hooks support |
-| **Import a codebase, reverse-engineer architecture in seconds** | Two-phase import: instant skeleton scan + background AI enrichment. Works on existing projects too |
-| **9 export formats** | YAML / JSON / PNG / Mermaid / Markdown / session backup / project archive / clipboard |
+| **AI brainstorm workflow** | Three phases that progressively refine your idea (brainstorm → design → iterate). AI asks hard questions until the plan is solid — not one-shot generation |
+| **2-Agent architecture** | Design and build are separated — AI won't modify your canvas during discussion, only during build. 7-layer context stack ensures AI never loses track of your project |
+| **Build progress visible in chat** | Build status auto-appears in conversation. Ask "why did this module fail?" and AI knows the answer |
+| **15+ built-in skills + one-click GitHub import** | Tell AI you're using Next.js, it auto-matches the best build skill. Import community skills from GitHub with one click |
+| **Import any codebase, reverse-engineer in seconds** | Drop in an existing project, get an architecture diagram instantly. AI enriches descriptions and relationships in the background |
+| **9 export options** | YAML / JSON / PNG / Mermaid / Markdown / session backup / project archive / clipboard |
 
 ---
 
@@ -146,6 +152,8 @@ npm install
 npm run dev        # http://localhost:3000
 ```
 
+> Canvas and AI chat work out of the box. To use **Build All**, install at least one AI CLI tool below. Each tool uses its own auth (e.g., `claude login`) — no API keys need to be configured in this project.
+
 **Tests**:
 ```bash
 npm test           # run all tests once
@@ -180,29 +188,6 @@ npm install -g @google/gemini-cli          # Gemini CLI
 | `POST` | `/api/skills/add` | Import a skill from GitHub URL or local path |
 | `POST` | `/api/skills/resolve` | Match the best skill for a given techStack |
 | `POST` | `/api/build/read-files` | Read build artifact files (post-build hooks) |
-
----
-
-## Architecture Overview
-
-```
-User
- │
- ├─ Canvas (Container + Block) ───────────────────────────┐
- │   └─ elkjs auto-layout                                  │
- │                                                         │
- ├─ AI Chat (ChatSidebar)                                  │
- │   ├─ Context Engine (7-layer stack)                     │
- │   ├─ Three-phase workflow (brainstorm / design / iterate)│
- │   └─ canvas-action → one-click apply to canvas ────────┤
- │                                                         │
- └─ Build All (AgentRunner)                                │
-     ├─ Topological sort → wave scheduling                 │
-     ├─ Skill system (techStack matching)                  │
-     ├─ Claude Code / Codex / Gemini CLI                   │
-     ├─ SSE real-time progress                             │
-     └─ BuildSummary → feeds back into Canvas Agent ───────┘
-```
 
 ---
 

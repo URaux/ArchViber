@@ -13,45 +13,44 @@
       color: #1a1a2e;
       display: flex;
       justify-content: center;
-      padding: 40px 16px 48px;
-      min-height: 100vh;
+      padding: 20px 12px 24px;
     }
 
     .diagram { width: 900px; max-width: 100%; }
 
-    .header { text-align: center; margin-bottom: 32px; }
-    .header h1 { font-size: 22px; font-weight: 700; color: #1a1a2e; letter-spacing: 0.01em; }
-    .header p { font-size: 13px; color: #6b7280; margin-top: 6px; }
+    .header { text-align: center; margin-bottom: 14px; }
+    .header h1 { font-size: 18px; font-weight: 700; color: #1a1a2e; }
+    .header p { font-size: 11px; color: #6b7280; margin-top: 3px; }
 
-    /* legend */
     .legend {
-      display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;
-      margin: 0 0 26px;
+      display: flex; justify-content: center; gap: 14px; flex-wrap: wrap;
+      margin: 0 0 12px;
     }
-    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: #6b7280; }
-    .legend-line { width: 24px; height: 2px; border-radius: 1px; }
-    .legend-dashed { width: 24px; height: 0; border-top: 2px dashed #9ca3af; }
+    .legend-item { display: flex; align-items: center; gap: 4px; font-size: 10px; color: #6b7280; }
+    .legend-line { width: 18px; height: 2px; border-radius: 1px; }
+    .legend-dashed { width: 18px; height: 0; border-top: 2px dashed #9ca3af; }
 
-    /* section band */
+    /* 2x2 grid */
+    .grid-2x2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
     .section {
-      border-radius: 14px;
-      padding: 18px 20px 20px;
-      margin-bottom: 8px;
+      border-radius: 10px;
+      padding: 10px 12px 12px;
       position: relative;
     }
-    .section-orchestrator { background: #f5f3ff; border: 1.5px solid #ddd6fe; border-top: 4px solid #7c3aed; }
-    .section-canvas       { background: #eff6ff; border: 1.5px solid #bfdbfe; border-top: 4px solid #2563eb; }
-    .section-build        { background: #f0fdf4; border: 1.5px solid #bbf7d0; border-top: 4px solid #16a34a; }
-    .section-import       { background: #fff7ed; border: 1.5px solid #fed7aa; border-top: 4px solid #ea580c; }
-    .section-skills       { background: #fdf4ff; border: 1.5px solid #f0abfc; border-top: 4px solid #a21caf; }
+    .section-orchestrator { background: #f5f3ff; border: 1px solid #ddd6fe; border-top: 3px solid #7c3aed; grid-column: 1 / -1; }
+    .section-canvas       { background: #eff6ff; border: 1px solid #bfdbfe; border-top: 3px solid #2563eb; }
+    .section-build        { background: #f0fdf4; border: 1px solid #bbf7d0; border-top: 3px solid #16a34a; }
+    .section-import       { background: #fff7ed; border: 1px solid #fed7aa; border-top: 3px solid #ea580c; }
+    .section-skills       { background: #fdf4ff; border: 1px solid #f0abfc; border-top: 3px solid #a21caf; }
 
     .section-head {
-      display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
+      display: flex; align-items: center; gap: 6px; margin-bottom: 8px;
     }
     .sbadge {
-      display: inline-flex; align-items: center; gap: 5px;
-      font-size: 11px; font-weight: 600; padding: 3px 10px;
-      border-radius: 20px; letter-spacing: 0.04em; text-transform: uppercase;
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 10px; font-weight: 600; padding: 2px 8px;
+      border-radius: 16px; letter-spacing: 0.03em; text-transform: uppercase;
     }
     .sb-orch  { background: #ede9fe; color: #6d28d9; border: 1px solid #c4b5fd; }
     .sb-canvas{ background: #dbeafe; color: #1d4ed8; border: 1px solid #93c5fd; }
@@ -59,20 +58,19 @@
     .sb-import{ background: #ffedd5; color: #c2410c; border: 1px solid #fed7aa; }
     .sb-skills{ background: #fae8ff; color: #86198f; border: 1px solid #e879f9; }
 
-    .section-title { font-size: 14px; font-weight: 600; color: #374151; }
-    .section-sub   { font-size: 12px; color: #6b7280; margin-left: 4px; }
+    .section-title { font-size: 12px; font-weight: 600; color: #374151; }
+    .section-sub   { font-size: 10px; color: #6b7280; margin-left: 4px; }
 
-    /* card grid */
-    .cards-row { display: flex; gap: 10px; align-items: stretch; }
+    .cards-row { display: flex; gap: 6px; align-items: stretch; }
     .card {
-      flex: 1; background: #fff; border-radius: 10px; padding: 13px 14px;
+      flex: 1; background: #fff; border-radius: 8px; padding: 8px 10px;
       border: 1px solid #e5e7eb;
-      box-shadow: 0 1px 4px rgba(0,0,0,.06), 0 0 0 0.5px rgba(0,0,0,.04);
+      box-shadow: 0 1px 2px rgba(0,0,0,.04);
       position: relative; overflow: hidden;
     }
     .card::before {
       content: ''; position: absolute; left: 0; top: 0; bottom: 0;
-      width: 3px; border-radius: 3px 0 0 3px;
+      width: 2.5px; border-radius: 3px 0 0 3px;
     }
     .card-orch::before   { background: #7c3aed; }
     .card-canvas::before { background: #2563eb; }
@@ -80,32 +78,23 @@
     .card-import::before { background: #ea580c; }
     .card-skills::before { background: #a21caf; }
 
-    .card-name  { font-size: 13px; font-weight: 700; color: #111827; margin-bottom: 5px; }
-    .card-name .en { font-size: 11px; font-weight: 500; color: #9ca3af; margin-left: 5px; }
-    .card-desc  { font-size: 11.5px; color: #6b7280; line-height: 1.6; }
+    .card-name  { font-size: 11px; font-weight: 700; color: #111827; margin-bottom: 3px; }
+    .card-name .en { font-size: 10px; font-weight: 500; color: #9ca3af; margin-left: 4px; }
+    .card-desc  { font-size: 10px; color: #6b7280; line-height: 1.5; }
     .card-desc span {
       display: inline-block; background: #f3f4f6; border: 1px solid #e5e7eb;
-      border-radius: 4px; padding: 0 5px; font-size: 10.5px; color: #374151;
-      margin: 2px 1px 0; font-family: 'SFMono-Regular', Consolas, monospace;
+      border-radius: 3px; padding: 0 4px; font-size: 9.5px; color: #374151;
+      margin: 1px 1px 0; font-family: 'SFMono-Regular', Consolas, monospace;
     }
-    .card-desc .tag-orange {
-      background: #fff7ed; border-color: #fed7aa; color: #c2410c;
-    }
-    .card-desc .tag-blue {
-      background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8;
-    }
-    .card-desc .tag-green {
-      background: #f0fdf4; border-color: #bbf7d0; color: #15803d;
-    }
+    .card-desc .tag-orange { background: #fff7ed; border-color: #fed7aa; color: #c2410c; }
+    .card-desc .tag-blue { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+    .card-desc .tag-green { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
 
-    /* context stack pill rows */
-    .stack-row {
-      display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px;
-    }
+    .stack-row { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
     .stack-pill {
-      display: inline-flex; align-items: center; gap: 4px;
-      font-size: 10.5px; font-weight: 500; padding: 2px 8px;
-      border-radius: 4px; border: 1px solid;
+      display: inline-flex; align-items: center; gap: 3px;
+      font-size: 9px; font-weight: 500; padding: 1px 5px;
+      border-radius: 3px; border: 1px solid;
     }
     .sp-l0 { background: #fafafa; border-color: #e5e7eb; color: #6b7280; }
     .sp-l1 { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
@@ -116,76 +105,69 @@
     .sp-l6 { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
     .sp-l7 { background: #f0fdfa; border-color: #99f6e4; color: #0d9488; }
 
-    /* arrows between sections */
-    .arrows-svg { display: block; margin: 0 auto; overflow: visible; }
-
-    /* phase badges in canvas agent */
-    .phase-row { display: flex; gap: 6px; margin-top: 8px; }
+    .phase-row { display: flex; gap: 4px; margin-top: 4px; }
     .phase-badge {
-      flex: 1; text-align: center; padding: 4px 0; border-radius: 6px;
-      font-size: 10.5px; font-weight: 600; letter-spacing: .03em;
+      flex: 1; text-align: center; padding: 2px 0; border-radius: 4px;
+      font-size: 9px; font-weight: 600; letter-spacing: .02em;
       border: 1px solid;
     }
     .ph-brainstorm { background: #fffbeb; border-color: #fde68a; color: #d97706; }
     .ph-design     { background: #eff6ff; border-color: #bfdbfe; color: #2563eb; }
     .ph-iterate    { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
 
-    /* wave boxes inside build pool */
-    .wave-mini { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+    .wave-mini { display: flex; gap: 4px; margin-top: 4px; }
     .wave-box {
-      flex: 1; min-width: 60px; background: #f0fdf4;
-      border: 1px solid #86efac; border-radius: 6px;
-      padding: 5px 8px; text-align: center;
-      font-size: 10.5px; color: #15803d; font-weight: 600;
+      flex: 1; background: #f0fdf4;
+      border: 1px solid #86efac; border-radius: 4px;
+      padding: 2px 4px; text-align: center;
+      font-size: 9px; color: #15803d; font-weight: 600;
     }
 
-    /* skill pills */
-    .skill-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .skill-row { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
     .skill-pill {
-      font-size: 10.5px; font-weight: 500; padding: 2px 8px;
-      border-radius: 12px; border: 1px solid;
+      font-size: 9px; font-weight: 500; padding: 1px 6px;
+      border-radius: 10px; border: 1px solid;
     }
     .sk-local  { background: #f5f3ff; border-color: #ddd6fe; color: #6d28d9; }
     .sk-github { background: #f0fdf4; border-color: #86efac; color: #15803d; }
     .sk-import { background: #fff7ed; border-color: #fed7aa; color: #c2410c; }
 
-    /* tech bar */
+    .sse-badge {
+      display: inline-flex; align-items: center; gap: 2px;
+      background: #fff7ed; border: 1px solid #fed7aa; color: #c2410c;
+      border-radius: 3px; font-size: 9px; font-weight: 600;
+      padding: 0px 4px; letter-spacing: .02em;
+    }
+
     .tech-bar {
-      margin-top: 24px; padding: 16px 20px; background: #fff;
-      border: 1px solid #e5e7eb; border-radius: 12px;
-      display: flex; flex-wrap: wrap; gap: 10px 0; align-items: center;
+      margin-top: 10px; padding: 8px 12px; background: #fff;
+      border: 1px solid #e5e7eb; border-radius: 8px;
+      display: flex; flex-wrap: wrap; gap: 6px 0; align-items: center;
     }
     .tech-bar-label {
-      font-size: 11px; font-weight: 600; color: #9ca3af;
-      text-transform: uppercase; letter-spacing: .06em;
-      margin-right: 8px; flex-shrink: 0;
+      font-size: 10px; font-weight: 600; color: #9ca3af;
+      text-transform: uppercase; letter-spacing: .05em;
+      margin-right: 6px; flex-shrink: 0;
     }
-    .pill-group { display: flex; flex-wrap: wrap; gap: 6px; }
+    .pill-group { display: flex; flex-wrap: wrap; gap: 4px; }
     .pill {
-      display: inline-block; font-size: 11px; font-weight: 500;
-      padding: 3px 10px; border-radius: 20px; border: 1px solid;
+      display: inline-block; font-size: 10px; font-weight: 500;
+      padding: 1px 7px; border-radius: 16px; border: 1px solid;
     }
     .pill-purple { background: #ede9fe; color: #6d28d9; border-color: #c4b5fd; }
     .pill-green  { background: #dcfce7; color: #15803d; border-color: #86efac; }
     .pill-blue   { background: #dbeafe; color: #1d4ed8; border-color: #93c5fd; }
     .pill-gray   { background: #f3f4f6; color: #374151; border-color: #d1d5db; }
     .pill-orange { background: #ffedd5; color: #c2410c; border-color: #fed7aa; }
-    .pill-sep { width: 1px; height: 16px; background: #e5e7eb; align-self: center; margin: 0 4px; }
-
-    .sse-badge {
-      display: inline-flex; align-items: center; gap: 3px;
-      background: #fff7ed; border: 1px solid #fed7aa; color: #c2410c;
-      border-radius: 4px; font-size: 10px; font-weight: 600;
-      padding: 1px 6px; letter-spacing: .03em;
-    }
+    .pill-sep { width: 1px; height: 12px; background: #e5e7eb; align-self: center; margin: 0 3px; }
   </style>
 </head>
 <body>
 <div class="diagram">
 
   <div class="header">
-    <h1>Vibe Pencil — 系统架构 System Architecture</h1>
-    <p>Orchestrator + 2-Agent Architecture · Context Engineering · Wave-based Build Pool · Two-phase Import</p>
+    <h1>Vibe Pencil — System Architecture</h1>
+    <p>Orchestrator + 2-Agent Architecture &middot; Context Engineering &middot; Wave-based Build Pool &middot; Two-phase Import</p>
   </div>
 
   <div class="legend">
@@ -194,86 +176,69 @@
     <div class="legend-item"><div class="legend-line" style="background:#16a34a;"></div><span>Build Agent Pool</span></div>
     <div class="legend-item"><div class="legend-line" style="background:#ea580c;"></div><span>Import Pipeline</span></div>
     <div class="legend-item"><div class="legend-line" style="background:#a21caf;"></div><span>Skill System</span></div>
-    <div class="legend-item"><div class="legend-dashed"></div><span>SSE 流式</span></div>
+    <div class="legend-item"><div class="legend-dashed"></div><span>SSE Stream</span></div>
   </div>
 
-  <!-- ══ Orchestrator ══ -->
-  <div class="section section-orchestrator">
-    <div class="section-head">
-      <span class="sbadge sb-orch">Orchestrator</span>
-      <span class="section-title">Next.js Server</span>
-      <span class="section-sub">/ api routes + child_process.spawn</span>
-    </div>
-    <div class="cards-row">
+  <div class="grid-2x2">
 
-      <div class="card card-orch">
-        <div class="card-name">Context Engine <span class="en">7-Layer Stack</span></div>
-        <div class="card-desc">
-          构建并压缩每轮对话的上下文窗口
-          <div class="stack-row">
-            <span class="stack-pill sp-l0">L0 Language</span>
-            <span class="stack-pill sp-l1">L1 Identity</span>
-            <span class="stack-pill sp-l2">L2 History</span>
-            <span class="stack-pill sp-l3">L3 Canvas State</span>
-            <span class="stack-pill sp-l4">L4 Task</span>
-            <span class="stack-pill sp-l5">L5 Skills</span>
-            <span class="stack-pill sp-l6">L6 Constraints</span>
-            <span class="stack-pill sp-l7">L7 Output Format</span>
+    <!-- Orchestrator — full width top row -->
+    <div class="section section-orchestrator">
+      <div class="section-head">
+        <span class="sbadge sb-orch">Orchestrator</span>
+        <span class="section-title">Next.js Server</span>
+        <span class="section-sub">/ api routes + child_process.spawn</span>
+      </div>
+      <div class="cards-row">
+        <div class="card card-orch">
+          <div class="card-name">Context Engine <span class="en">7-Layer</span></div>
+          <div class="card-desc">
+            Build & compress context per turn
+            <div class="stack-row">
+              <span class="stack-pill sp-l0">L0 Lang</span>
+              <span class="stack-pill sp-l1">L1 Identity</span>
+              <span class="stack-pill sp-l2">L2 History</span>
+              <span class="stack-pill sp-l3">L3 Canvas</span>
+              <span class="stack-pill sp-l4">L4 Task</span>
+              <span class="stack-pill sp-l5">L5 Skills</span>
+              <span class="stack-pill sp-l6">L6 Constraints</span>
+              <span class="stack-pill sp-l7">L7 Output</span>
+            </div>
+          </div>
+        </div>
+        <div class="card card-orch">
+          <div class="card-name">Skill Resolver</div>
+          <div class="card-desc">
+            Auto-match optimal skill by techStack<br>
+            <span>techStack matching</span> <span>lazy loading</span>
+            <span class="tag-blue">manifest→chat</span> <span class="tag-green">full→build</span>
+          </div>
+        </div>
+        <div class="card card-orch">
+          <div class="card-name">Build State Mgr</div>
+          <div class="card-desc">
+            Persistent build state + auto-reconnect<br>
+            <span>wave progress</span> <span>node status</span>
+            <span class="tag-orange">SSE reconnect</span>
+            <span class="sse-badge">SSE</span>
           </div>
         </div>
       </div>
-
-      <div class="card card-orch">
-        <div class="card-name">Skill Resolver</div>
-        <div class="card-desc">
-          按节点 techStack 自动匹配最优 Skill<br>
-          <span>techStack matching</span> <span>lazy loading</span><br>
-          <span class="tag-blue">manifest for chat</span> <span class="tag-green">full for build</span>
-        </div>
-      </div>
-
-      <div class="card card-orch">
-        <div class="card-name">Build State Manager</div>
-        <div class="card-desc">
-          持久化构建状态，断线自动恢复<br>
-          <span>wave progress</span> <span>node status</span><br>
-          <span class="tag-orange">SSE reconnect</span>
-          &nbsp;<span class="sse-badge">SSE</span>
-        </div>
-      </div>
-
     </div>
-  </div>
 
-  <!-- arrow down -->
-  <svg class="arrows-svg" width="900" height="42" viewBox="0 0 900 42">
-    <line x1="300" y1="4" x2="300" y2="32" stroke="#a78bfa" stroke-width="1.5"/>
-    <polygon points="300,38 295,28 305,28" fill="#a78bfa"/>
-    <text x="308" y="25" font-size="10" fill="#7c3aed" font-family="-apple-system,sans-serif">chat request</text>
-    <line x1="600" y1="4" x2="600" y2="32" stroke="#a78bfa" stroke-width="1.5"/>
-    <polygon points="600,38 595,28 605,28" fill="#a78bfa"/>
-    <text x="608" y="25" font-size="10" fill="#7c3aed" font-family="-apple-system,sans-serif">build trigger</text>
-  </svg>
-
-  <!-- ══ Canvas Agent + Build Pool (side by side) ══ -->
-  <div class="cards-row" style="align-items: stretch; gap: 12px;">
-
-    <!-- Canvas Agent -->
-    <div class="section section-canvas" style="flex: 1; margin-bottom: 0;">
+    <!-- Canvas Agent — left -->
+    <div class="section section-canvas">
       <div class="section-head">
         <span class="sbadge sb-canvas">Canvas Agent</span>
         <span class="section-title">Read-only</span>
       </div>
-      <div class="card card-canvas" style="margin-bottom: 10px;">
+      <div class="card card-canvas" style="margin-bottom: 6px;">
         <div class="card-name">Tasks</div>
-        <div class="card-desc">
-          <span>Discuss</span> <span>Import</span> <span>Analyze</span>
-        </div>
+        <div class="card-desc"><span>Discuss</span> <span>Import</span> <span>Analyze</span></div>
       </div>
-      <div class="card card-canvas" style="margin-bottom: 10px;">
+      <div class="card card-canvas" style="margin-bottom: 6px;">
         <div class="card-name">Session Workflow</div>
         <div class="card-desc">
-          三阶段渐进推进
+          Three-phase progression
           <div class="phase-row">
             <span class="phase-badge ph-brainstorm">brainstorm</span>
             <span class="phase-badge ph-design">design</span>
@@ -284,89 +249,71 @@
       <div class="card card-canvas">
         <div class="card-name">Build Awareness</div>
         <div class="card-desc">
-          实时感知构建状态<br>
-          <span>BuildSummary feedback</span><br>
-          <span class="tag-blue">build events → chat</span>
+          <span>BuildSummary feedback</span>
+          <span class="tag-blue">build events→chat</span>
         </div>
       </div>
     </div>
 
-    <!-- Build Agent Pool -->
-    <div class="section section-build" style="flex: 1; margin-bottom: 0;">
+    <!-- Build Agent Pool — right -->
+    <div class="section section-build">
       <div class="section-head">
         <span class="sbadge sb-build">Build Agent Pool</span>
         <span class="section-title">N instances</span>
       </div>
-      <div class="card card-build" style="margin-bottom: 10px;">
+      <div class="card card-build" style="margin-bottom: 6px;">
         <div class="card-name">Wave Execution</div>
         <div class="card-desc">
-          拓扑排序 → 波次并行调度
+          Topo sort &rarr; wave-parallel scheduling
           <div class="wave-mini">
-            <div class="wave-box">Wave 0<br><span style="font-weight:400;font-size:10px;">parallel</span></div>
-            <div class="wave-box">Wave 1<br><span style="font-weight:400;font-size:10px;">parallel</span></div>
-            <div class="wave-box">Wave N<br><span style="font-weight:400;font-size:10px;">sequential</span></div>
+            <div class="wave-box">Wave 0</div>
+            <div class="wave-box">Wave 1</div>
+            <div class="wave-box">Wave N</div>
           </div>
         </div>
       </div>
-      <div class="card card-build" style="margin-bottom: 10px;">
+      <div class="card card-build" style="margin-bottom: 6px;">
         <div class="card-name">Post-build Hooks</div>
         <div class="card-desc">
-          每个节点构建后自动触发<br>
           <span>lint</span> <span>test</span> <span>custom cmd</span>
         </div>
       </div>
       <div class="card card-build">
         <div class="card-name">BuildSummary + Retry</div>
         <div class="card-desc">
-          提取构建产物摘要 → 反馈 Chat<br>
-          <span>retry failed nodes</span>
-          &nbsp;<span class="sse-badge">SSE</span>
+          Extract summary &rarr; feed back to Chat
+          <span class="sse-badge">SSE</span>
         </div>
       </div>
     </div>
 
-  </div>
-
-  <!-- arrow down to Import + Skills -->
-  <svg class="arrows-svg" width="900" height="36" viewBox="0 0 900 36">
-    <line x1="220" y1="4" x2="220" y2="26" stroke="#fb923c" stroke-width="1.5"/>
-    <polygon points="220,32 215,22 225,22" fill="#fb923c"/>
-    <text x="228" y="20" font-size="10" fill="#c2410c" font-family="-apple-system,sans-serif">import flow</text>
-    <line x1="680" y1="4" x2="680" y2="26" stroke="#c026d3" stroke-width="1.5"/>
-    <polygon points="680,32 675,22 685,22" fill="#c026d3"/>
-    <text x="688" y="20" font-size="10" fill="#a21caf" font-family="-apple-system,sans-serif">skill resolution</text>
-  </svg>
-
-  <!-- ══ Import + Skills row ══ -->
-  <div class="cards-row" style="align-items: stretch; gap: 12px;">
-
-    <!-- Two-phase Import -->
-    <div class="section section-import" style="flex: 1; margin-bottom: 0;">
+    <!-- Import — left -->
+    <div class="section section-import">
       <div class="section-head">
         <span class="sbadge sb-import">Two-phase Import</span>
       </div>
-      <div class="card card-import" style="margin-bottom: 8px;">
-        <div class="card-name">Phase 1 — Project Scanner</div>
+      <div class="card card-import" style="margin-bottom: 4px;">
+        <div class="card-name">Phase 1 — Scanner</div>
         <div class="card-desc">
-          即时骨架扫描（秒速）<br>
+          Instant skeleton scan<br>
           <span>file tree</span> <span>tech detection</span> <span>skeleton canvas</span>
         </div>
       </div>
       <div class="card card-import">
         <div class="card-name">Phase 2 — LLM Enhancement</div>
         <div class="card-desc">
-          后台 AI 增强（异步）<br>
-          <span>descriptions</span> <span>relationships</span> <span>background</span>
+          Background AI enrichment<br>
+          <span>descriptions</span> <span>relationships</span>
         </div>
       </div>
     </div>
 
-    <!-- Skill System -->
-    <div class="section section-skills" style="flex: 1; margin-bottom: 0;">
+    <!-- Skill System — right -->
+    <div class="section section-skills">
       <div class="section-head">
         <span class="sbadge sb-skills">Skill System</span>
       </div>
-      <div class="card card-skills" style="margin-bottom: 8px;">
+      <div class="card card-skills" style="margin-bottom: 4px;">
         <div class="card-name">Sources</div>
         <div class="card-desc">
           <div class="skill-row">
@@ -379,9 +326,9 @@
       <div class="card card-skills">
         <div class="card-name">Types</div>
         <div class="card-desc">
-          <span>Prompt Skills</span> <span>Hook Skills</span><br>
-          <span class="tag-blue">manifest → chat</span>
-          <span class="tag-green">full → build</span>
+          <span>Prompt Skills</span> <span>Hook Skills</span>
+          <span class="tag-blue">manifest→chat</span>
+          <span class="tag-green">full→build</span>
         </div>
       </div>
     </div>

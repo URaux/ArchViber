@@ -8,6 +8,8 @@
 
 **这不是画图工具。** 这是一个 AI 架构搭档：从模糊想法到可运行代码，全程对话驱动。
 
+> **Demo 截图即将上线** — 下方架构图展示系统内部设计。
+
 ---
 
 ## 谁需要这个？
@@ -33,19 +35,23 @@
 
 ---
 
-## 系统架构
+## 架构设计
+
+系统采用 **2-Agent 架构**：Canvas Agent（只读，负责对话和设计）和 Build Agent（可写，负责代码生成）。每个 Agent 接收一个由 7 层 context stack 精确构建的上下文窗口，确保 AI 在每个阶段只看到它需要的信息。
+
+### 系统架构
 
 ![系统架构](docs/arch-system.png)
 
-## 构建流程
-
-![构建流程](docs/arch-build-flow.png)
-
-## Context Engineering
+### Context Engineering
 
 ![Context Engineering](docs/arch-context.png)
 
-## 画布模型
+### 构建流程
+
+![构建流程](docs/arch-build-flow.png)
+
+### 画布模型
 
 ![画布模型](docs/arch-canvas-model.png)
 
@@ -55,12 +61,12 @@
 
 | 能力 | 为什么值得关注 |
 |---|---|
-| **AI 头脑风暴工作流** | brainstorm → design → iterate 三阶段渐进推进，不是一次性生成 |
-| **2-Agent 架构** | Canvas Agent 负责设计，Build Agent 负责构建，7 层 context stack 精确控制每一层输入 |
-| **Build 进度实时插入对话** | 构建事件自动注入聊天，Chat Agent 实时感知 build 状态 |
-| **15+ 内置技能 + GitHub 一键导入** | Skill 系统按 techStack 自动匹配最优技能，支持 post-build hooks |
-| **导入代码库秒速反向生成架构** | 两阶段导入：秒速骨架扫描 + 后台 AI 增强，现有项目也能用 |
-| **9 种导出格式** | YAML / JSON / PNG / Mermaid / Markdown / 会话备份 / 项目存档 / 剪贴板 |
+| **AI 头脑风暴工作流** | 三阶段渐进推进（brainstorm → design → iterate），AI 主动追问直到方案确认，而不是一次性生成 |
+| **2-Agent 架构** | 设计和构建分离——AI 在讨论阶段不会乱改你的画布，构建阶段才获得写权限。7 层 context stack 确保 AI 永远不丢失上下文 |
+| **构建进度实时可见** | 构建状态自动出现在对话中，你可以直接追问"为什么这个模块构建失败了？"，AI 知道答案 |
+| **15+ 内置技能 + GitHub 一键导入** | 告诉 AI 你用 Next.js，它自动匹配最优构建技能。还能从 GitHub 一键导入社区技能 |
+| **导入代码库秒速反向生成架构** | 把现有项目拖进来，秒速生成架构图，后台 AI 自动补充描述和关系 |
+| **9 种导出选项** | YAML / JSON / PNG / Mermaid / Markdown / 会话备份 / 项目存档 / 剪贴板 |
 
 ---
 
@@ -145,6 +151,8 @@ npm install
 npm run dev        # http://localhost:3000
 ```
 
+> 画布和 AI 对话功能无需额外配置即可使用。要使用 **Build All** 构建功能，请安装下方至少一种 AI CLI 工具。AI CLI 工具使用各自的认证方式（如 `claude login`），无需在本项目中配置 API Key。
+
 **测试**：
 ```bash
 npm test           # 运行全部测试
@@ -179,29 +187,6 @@ npm install -g @google/gemini-cli          # Gemini CLI
 | `POST` | `/api/skills/add` | 从 GitHub / 本地路径导入 Skill |
 | `POST` | `/api/skills/resolve` | 根据 techStack 匹配最优 Skill |
 | `POST` | `/api/build/read-files` | 读取构建产物文件（post-build hooks） |
-
----
-
-## 架构简述
-
-```
-用户
- │
- ├─ 画布（Container + Block）─────────────────────────────┐
- │   └─ elkjs 自动布局                                     │
- │                                                         │
- ├─ AI 对话（ChatSidebar）                                 │
- │   ├─ Context Engine（7 层 stack）                       │
- │   ├─ 三阶段工作流（brainstorm / design / iterate）      │
- │   └─ canvas-action → 一键应用到画布 ───────────────────┤
- │                                                         │
- └─ Build All（AgentRunner）                               │
-     ├─ 拓扑排序 → 波次调度                               │
-     ├─ Skill 系统（techStack 匹配）                      │
-     ├─ Claude Code / Codex / Gemini CLI                  │
-     ├─ SSE 实时进度推送                                   │
-     └─ BuildSummary → 反馈回 Canvas Agent ───────────────┘
-```
 
 ---
 
