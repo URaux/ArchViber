@@ -308,6 +308,24 @@ export function Canvas({ onOpenImportDialog }: CanvasProps) {
     return () => window.clearTimeout(timer)
   }, [canvasVersion, fitView, nodes.length])
 
+  // Refit on window resize so layout adapts to viewport changes
+  useEffect(() => {
+    let resizeTimer: ReturnType<typeof setTimeout>
+    const handleResize = () => {
+      clearTimeout(resizeTimer)
+      resizeTimer = setTimeout(() => {
+        if (nodes.length > 0) {
+          void fitView({ padding: 0.1, duration: 200 })
+        }
+      }, 200)
+    }
+    window.addEventListener('resize', handleResize)
+    return () => {
+      window.removeEventListener('resize', handleResize)
+      clearTimeout(resizeTimer)
+    }
+  }, [fitView, nodes.length])
+
   useEffect(() => {
     if (!editingNodeId) {
       return
