@@ -105,7 +105,7 @@ export function BuildDrawer() {
   const dragStartHeight = useRef<number>(DEFAULT_HEIGHT)
   const prevActive = useRef<boolean>(false)
 
-  // Auto-open on build start, collapse on build end
+  // Auto-open on build start, collapse then hide on build end
   useEffect(() => {
     const wasActive = prevActive.current
     const isActive = buildState.active
@@ -113,7 +113,11 @@ export function BuildDrawer() {
       setDrawerState?.('open')
     }
     if (wasActive && !isActive) {
+      // Show summary briefly, then auto-hide
       setDrawerState?.('collapsed')
+      const timer = setTimeout(() => setDrawerState?.('hidden'), 8000)
+      prevActive.current = isActive
+      return () => clearTimeout(timer)
     }
     prevActive.current = isActive
   }, [buildState.active, setDrawerState])
