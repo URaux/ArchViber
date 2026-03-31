@@ -134,6 +134,8 @@ export async function layoutArchitectureCanvas(
       'elk.spacing.edgeNode': '50',
       'elk.layered.spacing.nodeNodeBetweenLayers': '100',
       'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
+      'elk.separateConnectedComponents': 'true',
+      'elk.spacing.componentComponent': '60',
     },
     children: elkChildren,
     edges: rootEdges,

@@ -220,6 +220,7 @@ const CANVAS_ACTION_INSTRUCTIONS = [
   'CRITICAL RULES:',
   '- You MUST include add-edge actions to connect related blocks. An architecture without edges is incomplete.',
   '- Every block that depends on or communicates with another block MUST have an edge between them.',
+  '- Every container MUST have at least one block connected to a block in another container. No isolated containers.',
   '- Use descriptive edge labels (e.g., "HTTPS", "SQL", "gRPC", "WebSocket").',
   '- Only create edges between block nodes (not containers).',
   '- Keep normal prose AFTER the code block, and keep code blocks valid JSON.',
