@@ -6,7 +6,11 @@ import {
 } from '@xyflow/react'
 
 export function SyncEdge(props: EdgeProps) {
-  const [edgePath, labelX, labelY] = getSmoothStepPath({ ...props, borderRadius: 10 })
+  const [edgePath] = getSmoothStepPath({ ...props, borderRadius: 10 })
+
+  // Place label at the true midpoint between source and target positions
+  const midX = ((props.sourceX ?? 0) + (props.targetX ?? 0)) / 2
+  const midY = ((props.sourceY ?? 0) + (props.targetY ?? 0)) / 2
 
   return (
     <>
@@ -16,7 +20,7 @@ export function SyncEdge(props: EdgeProps) {
           <div
             className="pointer-events-none absolute rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 shadow-sm"
             style={{
-              transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+              transform: `translate(-50%, -50%) translate(${midX}px,${midY}px)`,
               zIndex: 1000,
             }}
           >
