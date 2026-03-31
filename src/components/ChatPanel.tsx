@@ -735,8 +735,8 @@ export function ChatPanel() {
                       )}
                     </div>
                   ) : (
-                    <div className="whitespace-pre-wrap break-words">
-                      {entry.content || '...'}
+                    <div className="break-words">
+                      {entry.content ? <ChatMarkdown content={entry.content} /> : '...'}
                     </div>
                   )}
                   {actionBlocks.length > 0 && (entry.canvasBefore ?? entry.canvasAfter) ? (
