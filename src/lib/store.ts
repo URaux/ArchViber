@@ -423,10 +423,28 @@ export const useAppStore = create<AppState>((set, get) => ({
   deleteChatSession: (id) => {
     const remaining = get().chatSessions.filter((s) => s.id !== id)
     const wasActive = get().activeChatSessionId === id
-    set({
-      chatSessions: remaining,
-      activeChatSessionId: wasActive ? (remaining[0]?.id ?? null) : get().activeChatSessionId,
-    })
+    if (wasActive && remaining.length > 0) {
+      // Switch to next session, restore its canvas
+      const next = remaining[0]
+      set({
+        chatSessions: remaining,
+        activeChatSessionId: next.id,
+        nodes: next.canvasSnapshot?.nodes ?? [],
+        edges: next.canvasSnapshot?.edges ?? [],
+        projectName: next.canvasSnapshot?.projectName ?? translate(get().locale, 'untitled'),
+      })
+    } else if (wasActive) {
+      // No sessions left — clear everything
+      set({
+        chatSessions: [],
+        activeChatSessionId: null,
+        nodes: [],
+        edges: [],
+        projectName: translate(get().locale, 'untitled'),
+      })
+    } else {
+      set({ chatSessions: remaining })
+    }
   },
   renameChatSession: (id, title) => {
     set({
