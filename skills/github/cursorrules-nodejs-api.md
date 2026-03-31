@@ -1,10 +1,10 @@
 ---
 name: cursorrules-nodejs-api
-description: Node.js API design — route handlers, validation, error handling, modular architecture, testing conventions
+description: Node.js API 设计模式 — 路由处理、Zod 验证、服务层分离、错误处理
 category: backend
 source: github
 source_url: https://github.com/PatrickJS/awesome-cursorrules/tree/main/rules/typescript-nestjs-best-practices-cursorrules-promp
-tags: [nodejs, api, validation, error-handling, architecture]
+tags: [Node.js, API, Express, Zod, 后端, 服务端]
 scope: [node]
 priority: 75
 ---

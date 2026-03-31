@@ -1,9 +1,9 @@
 ---
 name: planning
-description: Requirement decomposition and planning methodology
+description: 需求分解与规划方法论 — 任务拆解、假设识别、依赖排序
 category: architect
 source: local
-tags: [planning, decomposition, requirements]
+tags: [需求分析, 任务规划, 项目管理, 全局]
 scope: [global]
 priority: 90
 ---

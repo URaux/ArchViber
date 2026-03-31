@@ -1,9 +1,9 @@
 ---
 name: tailwind
-description: Tailwind CSS utility conventions
+description: Tailwind CSS 使用规范 — 工具类优先、响应式设计、语义化颜色
 category: frontend
 source: local
-tags: [tailwind, css, styling]
+tags: [Tailwind-CSS, 前端, 样式, 响应式设计]
 scope: [node, build]
 priority: 70
 ---

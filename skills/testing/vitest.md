@@ -1,9 +1,9 @@
 ---
 name: vitest
-description: Vitest testing patterns and conventions
+description: Vitest 测试模式 — 测试命名、AAA 结构、Mock 策略、测试隔离
 category: testing
 source: local
-tags: [testing, vitest, unit-tests]
+tags: [Vitest, 测试, 单元测试, Mock, TDD]
 scope: [build]
 priority: 80
 ---

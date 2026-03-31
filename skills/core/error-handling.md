@@ -1,9 +1,9 @@
 ---
 name: error-handling
-description: Error handling patterns and best practices
+description: 错误处理模式 — 输入验证、错误传播、用户友好的错误信息
 category: core
 source: local
-tags: [error-handling, reliability]
+tags: [错误处理, 可靠性, 输入验证, 通用]
 scope: [global, node, build]
 priority: 100
 ---

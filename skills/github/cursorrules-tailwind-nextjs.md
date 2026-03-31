@@ -1,10 +1,10 @@
 ---
 name: cursorrules-tailwind-nextjs
-description: Tailwind CSS + Next.js styling rules — utility-first, responsive design, component patterns, accessibility
+description: Tailwind + Next.js 样式规范 — 类排序、cn() 条件类、动态类陷阱、无障碍
 category: frontend
 source: github
 source_url: https://github.com/PatrickJS/awesome-cursorrules/tree/main/rules/tailwind-css-nextjs-guide-cursorrules-prompt-file
-tags: [tailwind, nextjs, responsive, accessibility, shadcn]
+tags: [Tailwind-CSS, Next.js, 样式规范, 可访问性, 前端]
 scope: [node, build]
 priority: 75
 ---

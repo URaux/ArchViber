@@ -1,9 +1,9 @@
 ---
 name: api-design
-description: REST API conventions and backend design patterns
+description: REST API 设计规范 — 资源命名、HTTP 方法、错误格式、分页
 category: backend
 source: local
-tags: [api, rest, backend]
+tags: [REST-API, 后端, HTTP, Express, FastAPI, Node.js]
 scope: [node, build]
 priority: 80
 ---

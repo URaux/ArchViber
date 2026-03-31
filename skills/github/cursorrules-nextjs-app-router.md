@@ -1,10 +1,10 @@
 ---
 name: cursorrules-nextjs-app-router
-description: Next.js App Router best practices — server components, routing, layouts, error boundaries
+description: Next.js App Router 规范 — 文件约定、Server/Client 组件、数据获取、ISR
 category: frontend
 source: github
 source_url: https://github.com/PatrickJS/awesome-cursorrules/tree/main/rules/nextjs-app-router-cursorrules-prompt-file
-tags: [nextjs, app-router, server-components, routing]
+tags: [Next.js, App-Router, SSR, React, 前端框架]
 scope: [node, build]
 priority: 75
 ---

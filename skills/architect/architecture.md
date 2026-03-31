@@ -1,9 +1,9 @@
 ---
 name: architecture
-description: System design principles and architectural patterns
+description: 系统设计原则 — 关注点分离、依赖注入、可测试性设计
 category: architect
 source: local
-tags: [architecture, system-design, patterns]
+tags: [架构设计, 系统设计, 设计模式, 全局]
 scope: [global]
 priority: 90
 ---

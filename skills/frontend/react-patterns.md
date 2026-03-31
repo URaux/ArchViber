@@ -1,9 +1,9 @@
 ---
 name: react-patterns
-description: React component patterns and hooks best practices
+description: React 组件模式 — 函数式组件、自定义 Hooks、状态管理、性能优化
 category: frontend
 source: local
-tags: [react, components, hooks]
+tags: [React, 前端, Hooks, 组件设计, 状态管理]
 scope: [node, build]
 priority: 80
 ---

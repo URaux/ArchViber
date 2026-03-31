@@ -1,10 +1,10 @@
 ---
 name: cursorrules-vitest
-description: Vitest unit testing best practices — mocking, Arrange-Act-Assert, TypeScript test patterns
+description: Vitest 高级测试模式 — vi.mock 位置、异步测试、TypeScript Mock 类型
 category: testing
 source: github
 source_url: https://github.com/PatrickJS/awesome-cursorrules/tree/main/rules/vitest-unit-testing-cursorrules-prompt-file
-tags: [vitest, testing, mocking, typescript]
+tags: [Vitest, 测试, Mock, 异步测试, TypeScript]
 scope: [node]
 priority: 75
 ---

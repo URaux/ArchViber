@@ -1,10 +1,10 @@
 ---
 name: cursorrules-typescript-quality
-description: TypeScript code quality rules — naming, functions, data modeling, SOLID principles, error handling
+description: TypeScript 代码质量 — 命名规范、判别联合、SOLID 原则、不可变性
 category: core
 source: github
 source_url: https://github.com/PatrickJS/awesome-cursorrules/tree/main/rules/typescript-nestjs-best-practices-cursorrules-promp
-tags: [typescript, code-quality, naming, functions, solid]
+tags: [TypeScript, 代码质量, SOLID, 类型系统, 通用]
 scope: [node, build]
 priority: 75
 ---

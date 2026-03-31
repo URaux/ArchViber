@@ -42,6 +42,11 @@ export function BuildButton() {
     }
   }
 
+  // Build a map of nodeId -> techStack for skill resolution
+  const nodeTechStacks = new Map(
+    (buildPlan?.targetNodes ?? []).map((n) => [n.id, n.data.techStack ?? ''])
+  )
+
   return (
     <div className="flex items-center gap-2">
       {selectedCount > 0 ? (
@@ -69,6 +74,7 @@ export function BuildButton() {
         onConfirm={handleConfirm}
         waves={buildPlan?.waves ?? []}
         nodeNames={buildPlan?.nodeNames ?? new Map()}
+        nodeTechStacks={nodeTechStacks}
         mode={pendingMode}
       />
     </div>

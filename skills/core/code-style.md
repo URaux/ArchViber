@@ -1,9 +1,9 @@
 ---
 name: code-style
-description: Code style and naming conventions
+description: 代码风格与命名规范 — 函数设计、变量命名、格式一致性
 category: core
 source: local
-tags: [code-quality, naming]
+tags: [代码质量, 命名规范, 函数设计, 通用]
 scope: [global, node, build]
 priority: 100
 ---

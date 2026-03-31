@@ -1,10 +1,10 @@
 ---
 name: cursorrules-react-typescript-nextjs
-description: React + TypeScript + Next.js patterns — functional components, error handling, RSC conventions, Zod validation
+description: React + TypeScript 最佳实践 — RORO 模式、Zod 验证、Guard Clauses
 category: frontend
 source: github
 source_url: https://github.com/PatrickJS/awesome-cursorrules/tree/main/rules/react-typescript-nextjs-nodejs-cursorrules-prompt-
-tags: [react, typescript, nextjs, shadcn, zod]
+tags: [React, TypeScript, 设计模式, 类型安全, 前端]
 scope: [node, build]
 priority: 75
 ---

@@ -1,10 +1,10 @@
 ---
 name: cursorrules-nextjs15-react19
-description: Next.js 15 + React 19 patterns — RSC, useActionState, async APIs, Suspense, URL state
+description: Next.js 15 + React 19 新特性 — useActionState、异步 API、Server Actions
 category: frontend
 source: github
 source_url: https://github.com/PatrickJS/awesome-cursorrules/tree/main/rules/nextjs15-react19-vercelai-tailwind-cursorrules-prompt-file
-tags: [nextjs, react19, server-components, app-router, async]
+tags: [Next.js-15, React-19, Server-Actions, 前端框架, 最新特性]
 scope: [node, build]
 priority: 75
 ---
