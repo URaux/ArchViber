@@ -22,6 +22,27 @@ export function extractActionBlocks(content: string) {
 
 function dedupeRepeatedResponse(content: string) {
   const compact = content.replace(/\n{3,}/g, '\n\n').trim()
+
+  // Check if the content is the same text repeated twice (concatenated)
+  if (compact.length > 20) {
+    const half = Math.floor(compact.length / 2)
+    // Try exact half split
+    if (compact.slice(0, half).trim() === compact.slice(half).trim()) {
+      return compact.slice(0, half).trim()
+    }
+    // Try splitting by repeated paragraph pattern
+    const lines = compact.split('\n')
+    if (lines.length >= 4) {
+      const halfLines = Math.floor(lines.length / 2)
+      const firstHalf = lines.slice(0, halfLines).join('\n').trim()
+      const secondHalf = lines.slice(halfLines).join('\n').trim()
+      if (firstHalf === secondHalf) {
+        return firstHalf
+      }
+    }
+  }
+
+  // Original section-based dedup
   const sections = compact
     .split(/(?:\n\s*-{3,}\s*\n)+|(?:\n\s*){3,}/)
     .map((section) => section.trim())
