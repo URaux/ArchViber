@@ -5,6 +5,7 @@ import type { Edge, Node } from '@xyflow/react'
 import { t } from '@/lib/i18n'
 import { getRandomChatThinkingMessage } from '@/lib/loading-messages'
 import { extractActionBlocks, extractVisibleChatText, extractUserChoices } from '@/lib/chat-actions'
+import { parseOptions } from '@/lib/option-parser'
 import { ChatMarkdown } from './ChatMarkdown'
 import { OptionCards } from './OptionCards'
 import { canvasToYaml } from '@/lib/schema-engine'
@@ -274,6 +275,7 @@ export function ChatPanel() {
   const { applyCanvasActions, restoreSnapshot, actionErrors } = useCanvasActions()
   const [message, setMessage] = useState('')
   const [isSending, setIsSending] = useState(false)
+  const sendLockRef = useRef(false)
   const [error, setError] = useState<string | null>(null)
   const [codeContext, setCodeContext] = useState<string | null>(null)
   const [isLoadingCode, setIsLoadingCode] = useState(false)
@@ -362,13 +364,28 @@ export function ChatPanel() {
         return [{ role: 'assistant', content, ...(actions ? { actions } : {}) }]
       }
 
-      const lastMessage = current.at(-1)
+      // Find the last assistant message (prefer empty placeholder, fall back to any assistant)
+      let targetIdx = -1
+      for (let i = current.length - 1; i >= 0; i--) {
+        if (current[i].role === 'assistant') {
+          if (!current[i].content) {
+            // Found empty placeholder — replace it
+            targetIdx = i
+            break
+          }
+          if (targetIdx === -1) {
+            targetIdx = i
+          }
+        }
+      }
 
-      if (!lastMessage || lastMessage.role !== 'assistant') {
+      if (targetIdx === -1) {
         return [...current, { role: 'assistant', content, ...(actions ? { actions } : {}) }]
       }
 
-      return [...current.slice(0, -1), { ...lastMessage, content, ...(actions ? { actions } : {}) }]
+      const updated = [...current]
+      updated[targetIdx] = { ...updated[targetIdx], content, ...(actions ? { actions } : {}) }
+      return updated
     })
   }
 
@@ -419,59 +436,64 @@ export function ChatPanel() {
         }),
       })
 
-      if (!response.ok || !response.body) {
-        throw new Error(t('chat_start_failed'))
+      if (!response.ok) {
+        const errBody = await response.json().catch(() => ({ error: t('chat_start_failed') })) as { error?: string }
+        throw new Error(errBody.error ?? t('chat_start_failed'))
       }
 
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
       let fullAssistantText = ''
-      let visibleAssistantText = ''
-      let streamCompletedNormally = false
 
-      while (true) {
-        const { value, done } = await reader.read()
-
-        if (done) {
-          break
+      const contentType = response.headers.get('content-type') ?? ''
+      if (contentType.includes('application/json')) {
+        // Non-streaming JSON response (CC spawn path)
+        const data = await response.json() as { content?: string; ccSessionId?: string; error?: string }
+        if (data.error) throw new Error(data.error)
+        fullAssistantText = data.content ?? ''
+        if (data.ccSessionId) {
+          updateChatSession(sessionId, { ccSessionId: data.ccSessionId })
         }
+      } else {
+        // SSE streaming response (direct-api / custom-api path)
+        if (!response.body) throw new Error(t('chat_start_failed'))
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+        let visibleAssistantText = ''
 
-        const chunk = decoder.decode(value, { stream: true })
-        buffer += chunk
-        const { events, rest } = parseStreamEvents(buffer)
-        buffer = rest
+        while (true) {
+          const { value, done } = await reader.read()
+          if (done) break
 
-        for (const streamEvent of events) {
-          if (streamEvent.type === 'session' && streamEvent.ccSessionId) {
-            // Save the CC session ID so subsequent messages can resume this session
-            updateChatSession(sessionId, { ccSessionId: streamEvent.ccSessionId })
-            continue
-          }
+          buffer += decoder.decode(value, { stream: true })
+          const { events, rest } = parseStreamEvents(buffer)
+          buffer = rest
 
-          if (streamEvent.type === 'chunk' && streamEvent.text) {
-            fullAssistantText += streamEvent.text
-            const nextVisibleText = extractVisibleChatText(fullAssistantText)
-            if (nextVisibleText !== visibleAssistantText) {
-              visibleAssistantText = nextVisibleText
-              updateAssistantMessage(visibleAssistantText)
+          for (const streamEvent of events) {
+            if (streamEvent.type === 'session' && streamEvent.ccSessionId) {
+              updateChatSession(sessionId, { ccSessionId: streamEvent.ccSessionId })
+              continue
             }
-            continue
-          }
-
-          if (streamEvent.type === 'error') {
-            throw new Error(streamEvent.error ?? t('chat_failed'))
+            if (streamEvent.type === 'chunk' && streamEvent.text) {
+              fullAssistantText += streamEvent.text
+              const nextVisibleText = extractVisibleChatText(fullAssistantText)
+              if (nextVisibleText !== visibleAssistantText) {
+                visibleAssistantText = nextVisibleText
+                updateAssistantMessage(visibleAssistantText)
+              }
+              continue
+            }
+            if (streamEvent.type === 'error') {
+              throw new Error(streamEvent.error ?? t('chat_failed'))
+            }
           }
         }
       }
-
-      streamCompletedNormally = true
 
       const actionBlocks = extractActionBlocks(fullAssistantText)
       updateAssistantMessage(extractVisibleChatText(fullAssistantText), actionBlocks)
-      // Auto-apply canvas actions only when stream completed without error and not in brainstorm phase
+      // Auto-apply canvas actions when not in brainstorm phase
       const currentPhase = useAppStore.getState().chatSessions.find((s) => s.id === sessionId)?.phase ?? 'brainstorm'
-      if (streamCompletedNormally && actionBlocks.length > 0 && currentPhase !== 'brainstorm') {
+      if (actionBlocks.length > 0 && currentPhase !== 'brainstorm') {
         await applyCanvasActions(actionBlocks, messageIndex)
         // Auto-transition from design to iterate after first successful apply
         if (currentPhase === 'design') {
@@ -524,7 +546,8 @@ export function ChatPanel() {
   }
 
   async function handleOptionSelect(text: string) {
-    if (isSending) return
+    if (isSending || sendLockRef.current) return
+    sendLockRef.current = true
     setMessage('')
     // Build a synthetic submit by temporarily overriding the message value
     const trimmedMessage = text.trim()
@@ -564,52 +587,61 @@ export function ChatPanel() {
         }),
       })
 
-      if (!response.ok || !response.body) {
-        throw new Error(t('chat_start_failed'))
+      if (!response.ok) {
+        const errBody = await response.json().catch(() => ({ error: t('chat_start_failed') })) as { error?: string }
+        throw new Error(errBody.error ?? t('chat_start_failed'))
       }
 
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
       let fullAssistantText = ''
-      let visibleAssistantText = ''
-      let streamCompletedNormally = false
 
-      while (true) {
-        const { value, done } = await reader.read()
-        if (done) break
+      const contentType = response.headers.get('content-type') ?? ''
+      if (contentType.includes('application/json')) {
+        const data = await response.json() as { content?: string; ccSessionId?: string; error?: string }
+        if (data.error) throw new Error(data.error)
+        fullAssistantText = data.content ?? ''
+        if (data.ccSessionId) {
+          updateChatSession(sessionId, { ccSessionId: data.ccSessionId })
+        }
+      } else {
+        if (!response.body) throw new Error(t('chat_start_failed'))
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+        let visibleAssistantText = ''
 
-        const chunk = decoder.decode(value, { stream: true })
-        buffer += chunk
-        const { events, rest } = parseStreamEvents(buffer)
-        buffer = rest
+        while (true) {
+          const { value, done } = await reader.read()
+          if (done) break
 
-        for (const streamEvent of events) {
-          if (streamEvent.type === 'session' && streamEvent.ccSessionId) {
-            updateChatSession(sessionId, { ccSessionId: streamEvent.ccSessionId })
-            continue
-          }
-          if (streamEvent.type === 'chunk' && streamEvent.text) {
-            fullAssistantText += streamEvent.text
-            const nextVisibleText = extractVisibleChatText(fullAssistantText)
-            if (nextVisibleText !== visibleAssistantText) {
-              visibleAssistantText = nextVisibleText
-              updateAssistantMessage(visibleAssistantText)
+          buffer += decoder.decode(value, { stream: true })
+          const { events, rest } = parseStreamEvents(buffer)
+          buffer = rest
+
+          for (const streamEvent of events) {
+            if (streamEvent.type === 'session' && streamEvent.ccSessionId) {
+              updateChatSession(sessionId, { ccSessionId: streamEvent.ccSessionId })
+              continue
             }
-            continue
-          }
-          if (streamEvent.type === 'error') {
-            throw new Error(streamEvent.error ?? t('chat_failed'))
+            if (streamEvent.type === 'chunk' && streamEvent.text) {
+              fullAssistantText += streamEvent.text
+              const nextVisibleText = extractVisibleChatText(fullAssistantText)
+              if (nextVisibleText !== visibleAssistantText) {
+                visibleAssistantText = nextVisibleText
+                updateAssistantMessage(visibleAssistantText)
+              }
+              continue
+            }
+            if (streamEvent.type === 'error') {
+              throw new Error(streamEvent.error ?? t('chat_failed'))
+            }
           }
         }
       }
 
-      streamCompletedNormally = true
-
       const actionBlocks = extractActionBlocks(fullAssistantText)
       updateAssistantMessage(extractVisibleChatText(fullAssistantText), actionBlocks)
       const currentPhase = useAppStore.getState().chatSessions.find((s) => s.id === sessionId)?.phase ?? 'brainstorm'
-      if (streamCompletedNormally && actionBlocks.length > 0 && currentPhase !== 'brainstorm') {
+      if (actionBlocks.length > 0 && currentPhase !== 'brainstorm') {
         await applyCanvasActions(actionBlocks, messageIndex)
         if (currentPhase === 'design') {
           useAppStore.getState().setSessionPhase(sessionId, 'iterate')
@@ -626,6 +658,7 @@ export function ChatPanel() {
       })
     } finally {
       setIsSending(false)
+      sendLockRef.current = false
     }
   }
 
@@ -689,13 +722,37 @@ export function ChatPanel() {
                 ? rawActionBlocks
                 : []
 
-              // Detect if this is the last assistant message (for user-choice cards)
-              const isLastAssistant =
-                entry.role === 'assistant' && messageIndex === activeMessages.length - 1
-              const userChoices =
-                isLastAssistant && !isSending && entry.content
-                  ? extractUserChoices(entry.content)
-                  : []
+              // Option detection on ALL assistant messages (not just last).
+              // Last message: cards are clickable. Historical: disabled (view only).
+              const isSystemMsg = entry.role === 'assistant' &&
+                (entry.content.startsWith('[构建]') || entry.content.startsWith('[系统]'))
+              const isAssistantWithContent = entry.role === 'assistant' && !isSystemMsg && entry.content
+
+              // Find last real assistant index for enabling/disabling cards
+              const lastRealAssistantIdx = (() => {
+                for (let i = activeMessages.length - 1; i >= 0; i--) {
+                  const m = activeMessages[i]
+                  if (m.role === 'assistant' && !m.content.startsWith('[构建]') && !m.content.startsWith('[系统]')) {
+                    return i
+                  }
+                }
+                return -1
+              })()
+              const isLastAssistant = messageIndex === lastRealAssistantIdx
+
+              // Dual-layer option detection on all assistant messages:
+              // 1. Primary: AI outputs json:user-choice blocks
+              // 2. Fallback: regex-based numbered list detection (parseOptions)
+              let userChoices = isAssistantWithContent
+                ? extractUserChoices(entry.content)
+                : []
+              if (userChoices.length === 0 && isAssistantWithContent) {
+                const visible = extractVisibleChatText(entry.content)
+                const parsed = parseOptions(visible)
+                if (parsed) {
+                  userChoices = [{ question: '', options: parsed.options.map(o => o.text) }]
+                }
+              }
 
               // System messages (build events) render as slim muted banners, not bubbles
               const isSystemMessage =
@@ -730,14 +787,20 @@ export function ChatPanel() {
                       {entry.content ? (
                         <>
                           <ChatMarkdown content={entry.content} />
-                          {userChoices.map((choice, ci) => (
-                            <OptionCards
-                              key={ci}
-                              options={choice.options.map((opt, oi) => ({ number: String(oi + 1), text: opt }))}
-                              disabled={isSending}
-                              onSelect={(text) => { void handleOptionSelect(text) }}
-                            />
-                          ))}
+                          {userChoices.map((choice, ci) => {
+                            // Find the user's reply after this message to highlight selected option
+                            const nextUserMsg = activeMessages.slice(messageIndex + 1).find(m => m.role === 'user')
+                            const selectedText = !isLastAssistant && nextUserMsg ? nextUserMsg.content : undefined
+                            return (
+                              <OptionCards
+                                key={ci}
+                                options={choice.options.map((opt, oi) => ({ number: String(oi + 1), text: opt }))}
+                                disabled={isSending || !isLastAssistant}
+                                selectedText={selectedText}
+                                onSelect={(text) => { void handleOptionSelect(text) }}
+                              />
+                            )
+                          })}
                         </>
                       ) : (
                         actionBlocks.length > 0 ? null : (

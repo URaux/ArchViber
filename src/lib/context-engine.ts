@@ -48,7 +48,7 @@ function layerLanguage(locale: Locale): string {
 // ---------------------------------------------------------------------------
 
 function layerIdentity(): string {
-  return 'You are the AI assistant for ArchViber, a visual architecture editor. You help users design, analyze, and build software architectures.\n\nCRITICAL RULE — EVERY response that asks the user a question MUST end with a json:user-choice block. Do NOT end with a plain text question. The UI renders this as clickable cards.\n\nFormat:\n```json:user-choice\n{"question":"你的问题","options":["选项A","选项B","选项C"]}\n```\nYour response MUST end with this block. Plain text questions will not be shown to the user.'
+  return 'You are the AI assistant for ArchViber, a visual architecture editor. You help users design, analyze, and build software architectures.'
 }
 
 // ---------------------------------------------------------------------------
@@ -191,17 +191,9 @@ function layerTask(task: TaskType, taskParams: Record<string, string> = {}): str
 // L5: Skills
 // ---------------------------------------------------------------------------
 
-function layerSkills(skillContent: string | undefined, agentType: AgentType): string | null {
+function layerSkills(skillContent: string | undefined): string | null {
   if (!skillContent) return null
-
-  if (agentType === 'build') {
-    // Build agents get full skill content (they need specific instructions)
-    return '# Skills\n\n' + skillContent
-  }
-
-  // Canvas agents get skill manifest only (names + descriptions)
-  // This saves tokens for chat — full content not needed for discussion
-  return '# Available Skills\n\n' + skillContent
+  return '# Skills\n\nFollow these skill instructions carefully.\n\n' + skillContent
 }
 
 // ---------------------------------------------------------------------------
@@ -306,7 +298,7 @@ function layerOutputFormat(agentType: AgentType, task: TaskType, locale: Locale,
     return '# Output Format\n\nWrite files directly to the filesystem. Do not output file contents to stdout unless asked.'
   }
 
-  // canvas agent in brainstorm phase: suppress canvas-action instructions
+  // canvas agent in brainstorm phase: suppress canvas-action, guide Q&A style
   if (sessionPhase === 'brainstorm') {
     return [
       '# Output Format',
@@ -315,25 +307,14 @@ function layerOutputFormat(agentType: AgentType, task: TaskType, locale: Locale,
       'Focus on understanding requirements, clarifying questions, and proposing design approaches.',
       'When you have enough information, summarize the proposed architecture in text.',
       'The user will explicitly transition to design mode when ready.',
-      '',
-      '## CRITICAL: Interactive Choice Format',
-      '',
       locale === 'zh'
-        ? '**你必须使用以下格式让用户做选择，不要用普通编号列表：**'
-        : '**You MUST use this format when asking the user to choose, NOT regular numbered lists:**',
-      '',
-      '```json:user-choice',
-      '{"question":"你的问题/Your question","options":["选项A","选项B","选项C"]}',
-      '```',
-      '',
-      locale === 'zh'
-        ? '每次只问 1-2 个问题。等用户回答后再继续。\n普通信息列表不要用这个格式，只在需要用户做决定时使用。\n\n在你的第一次回复末尾，用 <!-- title: 项目标题 --> 格式输出标题（不超过15字，对用户不可见）。'
-        : 'Ask only 1-2 questions at a time. Wait for answer before continuing.\nDo NOT use this format for informational lists — only for decisions.\n\nAt the end of your first response, output a title in <!-- title: Project Title --> format (max 15 chars, invisible to user).',
+        ? '当前处于需求讨论阶段。请通过提问和讨论来理解用户需求，不要直接生成架构。\n每次只问 1-2 个最关键的问题，不要一次列出所有问题。等用户回答后再继续深入。如果有明确选项，用编号列出供用户选择（例如"1. 方案A 2. 方案B 3. 自定义输入"）。\n\n在你的第一次回复末尾，用 <!-- title: 项目标题 --> 格式输出标题（不超过15字，对用户不可见）。'
+        : 'Ask only 1-2 key questions at a time. Wait for the user\'s answer before diving deeper. When there are clear options, list them as numbered choices (e.g., "1. Option A  2. Option B  3. Custom input").\n\nAt the end of your first response, output a title in <!-- title: Project Title --> format (max 15 chars, invisible to user).',
     ].filter(Boolean).join('\n')
   }
 
   // canvas agent: discuss, discuss-node, analyze — all support canvas actions
-  return CANVAS_ACTION_INSTRUCTIONS + '\n\nRemember: Follow any skill guidelines listed above. They take precedence over default behavior.'
+  return CANVAS_ACTION_INSTRUCTIONS
 }
 
 // ---------------------------------------------------------------------------
@@ -355,7 +336,14 @@ export function buildSystemContext(options: ContextOptions): string {
     sessionPhase,
   } = options
 
-  const resolvedSkill = skillContent ?? resolveSkillContent(agentType, task, taskParams.techStack)
+  // Canvas agent: no skills. Skills are a build agent feature.
+  // Canvas uses flat prompts (brainstorm) or canvas-action format (design/iterate).
+  const resolvedSkill = agentType === 'build'
+    ? (skillContent ?? resolveSkillContent(agentType, task, taskParams.techStack, sessionPhase))
+    : undefined
+
+  // Brainstorm phase: use full layer stack but with brainstorm-specific L7.
+  // This matches the original "silky" version that worked well.
 
   const layers: Array<string | null> = [
     layerLanguage(locale),                                                          // L0
@@ -365,7 +353,7 @@ export function buildSystemContext(options: ContextOptions): string {
       : null,
     layerCanvasState(canvasYaml, selectedNodeContext, buildSummaryContext, codeContext), // L3
     layerTask(task, taskParams),                                                    // L4
-    layerSkills(resolvedSkill, agentType),                                          // L5
+    layerSkills(resolvedSkill),                                                       // L5
     layerConstraints(agentType, taskParams),                                        // L6
     layerOutputFormat(agentType, task, locale, sessionPhase),                       // L7
   ]
@@ -381,8 +369,12 @@ export function buildSystemContext(options: ContextOptions): string {
 export function resolveSkillContent(
   agentType: AgentType,
   task?: TaskType,
-  techStack?: string
+  techStack?: string,
+  _phase?: SessionPhase
 ): string | undefined {
+  // Skills are only for build agents. Canvas agent uses flat prompts.
+  if (agentType === 'canvas') return undefined
+
   // skill-loader uses 'fs' — only available server-side
   if (typeof window !== 'undefined') return undefined
 
@@ -397,12 +389,6 @@ export function resolveSkillContent(
     // eslint-disable-next-line no-eval
     const loader = eval("require('./skill-loader')") as {
       resolveSkillContent: (agentType: 'canvas' | 'build', scope: 'global' | 'node', techStack?: string) => string | undefined
-      resolveSkillManifest: (agentType: 'canvas' | 'build', scope: 'global' | 'node', techStack?: string) => string | undefined
-    }
-    // Canvas agents get a manifest (name+description only) to save tokens.
-    // Build agents get full skill content — they need detailed instructions.
-    if (agentType === 'canvas') {
-      return loader.resolveSkillManifest(agentType, scope, techStack)
     }
     return loader.resolveSkillContent(agentType, scope, techStack)
   } catch {

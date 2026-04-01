@@ -14,6 +14,8 @@ export interface SkillMetadata {
   source: 'local' | 'github' | 'team'
   tags: string[]
   scope: Array<'global' | 'node' | 'build'>
+  /** Session phases where this skill is active. Empty = all phases. */
+  phases: Array<'brainstorm' | 'design' | 'iterate'>
   priority: number
   /** Skill type: 'prompt' injects content into agent context; 'hook' runs a shell command. */
   type: 'prompt' | 'hook'
@@ -113,6 +115,14 @@ function parseFrontmatter(content: string): { metadata: Partial<SkillMetadata>; 
       metadata.trigger = value as 'post-build'
     } else if (key === 'command') {
       metadata.command = value
+    } else if (key === 'phases') {
+      const arrayMatch = value.match(/^\[(.*)\]$/)
+      if (arrayMatch) {
+        metadata.phases = arrayMatch[1]
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean) as Array<'brainstorm' | 'design' | 'iterate'>
+      }
     }
   }
 
@@ -166,6 +176,7 @@ export function loadSkillIndex(): IndexedSkill[] {
         source: metadata.source ?? 'local',
         tags: metadata.tags ?? [],
         scope: metadata.scope ?? ['global', 'node', 'build'],
+        phases: metadata.phases ?? [],  // empty = all phases
         priority: metadata.priority ?? 50,
         type: metadata.type ?? 'prompt',
         ...(metadata.trigger !== undefined ? { trigger: metadata.trigger } : {}),
@@ -201,7 +212,8 @@ export function invalidateSkillIndex(): void {
 export function resolveSkillsForTask(
   agentType: 'canvas' | 'build',
   scope: 'global' | 'node',
-  techStack?: string
+  techStack?: string,
+  phase?: 'brainstorm' | 'design' | 'iterate'
 ): ResolvedSkill[] {
   const index = loadSkillIndex()
   const resolved: ResolvedSkill[] = []
@@ -232,6 +244,18 @@ export function resolveSkillsForTask(
 
     // Hook-type skills are excluded from context injection; use resolveHooks() instead.
     if (metadata.type === 'hook') continue
+
+    // Phase filter: if skill specifies phases and current phase doesn't match, skip.
+    if (phase && metadata.phases.length > 0 && !metadata.phases.includes(phase)) continue
+
+    // Canvas agents skip dev-workflow skills (local/ and github/ sources).
+    // These are CC/IDE workflow skills (TDD, debugging, code review, etc.),
+    // not product architecture skills for end users.
+    if (agentType === 'canvas') {
+      const isDevWorkflow = filePath.includes('/local/') || filePath.includes('/github/') ||
+        filePath.includes('\\local\\') || filePath.includes('\\github\\')
+      if (isDevWorkflow) continue
+    }
 
     // 1. core/* — always included regardless of scope
     if (metadata.category === 'core') {
@@ -326,9 +350,10 @@ export function mergeResolvedSkills(skills: ResolvedSkill[]): string {
 export function resolveSkillContent(
   agentType: 'canvas' | 'build',
   scope: 'global' | 'node',
-  techStack?: string
+  techStack?: string,
+  phase?: 'brainstorm' | 'design' | 'iterate'
 ): string | undefined {
-  const skills = resolveSkillsForTask(agentType, scope, techStack)
+  const skills = resolveSkillsForTask(agentType, scope, techStack, phase)
   if (skills.length === 0) return undefined
   return mergeResolvedSkills(skills)
 }
@@ -341,9 +366,10 @@ export function resolveSkillContent(
 export function resolveSkillManifest(
   agentType: 'canvas' | 'build',
   scope: 'global' | 'node',
-  techStack?: string
+  techStack?: string,
+  phase?: 'brainstorm' | 'design' | 'iterate'
 ): string | undefined {
-  const skills = resolveSkillsForTask(agentType, scope, techStack)
+  const skills = resolveSkillsForTask(agentType, scope, techStack, phase)
   if (skills.length === 0) return undefined
   // Manifest: just name + description, not full content
   return skills

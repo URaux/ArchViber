@@ -95,6 +95,12 @@ export function extractAgentText(output: string) {
   const result: string[] = []
   const lines = stripAnsi(output).split(/\r?\n/)
 
+  // CC stream-json emits `assistant` events where message.content[0].text
+  // is the FULL accumulated text so far (not a delta). We track the last
+  // assistant text and only use it once at the end.
+  let lastAssistantText = ''
+  let hasAssistantEvents = false
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
     const trimmed = line.trim()
@@ -109,6 +115,25 @@ export function extractAgentText(output: string) {
     // Try to parse as a JSON event
     try {
       const event = JSON.parse(trimmed)
+
+      // Special handling for CC stream-json `assistant` events:
+      // Each one contains the FULL text so far, not a delta.
+      // Only keep the last one to avoid duplication.
+      if (event.type === 'assistant' && isObject(event.message)) {
+        const text = extractTextBlocks(event.message.content)
+        if (text) {
+          lastAssistantText = text
+          hasAssistantEvents = true
+          continue
+        }
+      }
+
+      // Skip `result` events when we already have assistant events —
+      // result.result contains the same full text, causing duplication.
+      if (hasAssistantEvents && event.type === 'result' && typeof event.result === 'string') {
+        continue
+      }
+
       const text = extractTextFromEvent(event)
       if (text) {
         result.push(text)
@@ -138,6 +163,11 @@ export function extractAgentText(output: string) {
         result.push(line + '\n')
       }
     }
+  }
+
+  // Append the last assistant text (which contains the full accumulated response)
+  if (hasAssistantEvents && lastAssistantText) {
+    result.push(lastAssistantText)
   }
 
   return result.join('')
