@@ -74,7 +74,6 @@ export function extractVisibleChatText(content: string) {
     const blockEnd = content.indexOf('```', blockStart + match[0].length)
     if (blockEnd === -1) {
       // Incomplete block (still streaming) — show everything before the block
-      visible += content.slice(cursor, blockStart)
       break
     }
 

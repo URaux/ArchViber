@@ -22,17 +22,19 @@ describe('prompt-templates', () => {
     expect(prompt).toContain('ApiService, UserDB')
     expect(prompt).toContain(input.project_context)
     expect(prompt).toContain(input.user_feedback)
-    expect(prompt).toContain("first-principles")
-    expect(prompt).toContain("Occam's razor")
-    expect(prompt).toContain('practical choices')
-    expect(prompt).toContain('```json:canvas-action')
+    expect(prompt).toContain('You are the AI assistant for ArchViber')
+    expect(prompt).toContain('Implement ApiService, UserDB in')
+    expect(prompt).toContain('Only modify files within:')
+    expect(prompt).toContain('Write files directly to the filesystem.')
   })
 
-  it('applies canvas-action instructions to canvas-modifying templates', () => {
-    expect(buildAll(input)).toContain('```json:canvas-action')
-    expect(buildNode(input)).toContain('```json:canvas-action')
-    expect(buildSubgraph(input)).toContain('```json:canvas-action')
-    expect(refactorNode(input)).toContain('```json:canvas-action')
+  it('keeps build templates in filesystem-writing mode', () => {
+    expect(buildAll(input)).toContain('Write files directly to the filesystem.')
+    expect(buildNode(input)).toContain('Write files directly to the filesystem.')
+    expect(buildSubgraph(input)).toContain('Write files directly to the filesystem.')
+    expect(refactorNode(input)).toContain('Write files directly to the filesystem.')
+    expect(buildAll(input)).not.toContain('```json:canvas-action')
+    expect(buildNode(input)).not.toContain('```json:canvas-action')
   })
 
   it('returns an analysis prompt without dropping project context', () => {
@@ -41,6 +43,7 @@ describe('prompt-templates', () => {
     expect(prompt).toContain(input.architecture_yaml)
     expect(prompt).toContain(input.project_context)
     expect(prompt).toContain(input.user_feedback)
-    expect(prompt).toContain("Occam's razor")
+    expect(prompt).toContain('Review the architecture, identify structural risks')
+    expect(prompt).toContain('```json:canvas-action')
   })
 })

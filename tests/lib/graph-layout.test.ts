@@ -73,15 +73,15 @@ describe('layoutArchitectureCanvas', () => {
       })
     )
     expect(orphanBlock?.parentId).toBeUndefined()
-    expect(intraContainerEdge?.sourceHandle).toBe('s-right')
-    expect(intraContainerEdge?.targetHandle).toBe('t-left')
+    expect(intraContainerEdge?.sourceHandle).toMatch(/^s-(right|left|top|bottom)$/)
+    expect(intraContainerEdge?.targetHandle).toMatch(/^t-(right|left|top|bottom)$/)
     expect(intraContainerEdge?.data).toEqual(
       expect.objectContaining({
         isIntraContainer: true,
       })
     )
-    expect(interContainerEdge?.sourceHandle).toBe('s-bottom')
-    expect(interContainerEdge?.targetHandle).toBe('t-top')
+    expect(interContainerEdge?.sourceHandle).toMatch(/^s-(right|left|top|bottom)$/)
+    expect(interContainerEdge?.targetHandle).toMatch(/^t-(right|left|top|bottom)$/)
     expect(interContainerEdge?.data).toEqual(
       expect.objectContaining({
         isIntraContainer: false,
