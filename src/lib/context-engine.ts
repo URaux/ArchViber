@@ -315,9 +315,20 @@ function layerOutputFormat(agentType: AgentType, task: TaskType, locale: Locale,
       'Focus on understanding requirements, clarifying questions, and proposing design approaches.',
       'When you have enough information, summarize the proposed architecture in text.',
       'The user will explicitly transition to design mode when ready.',
+      '',
+      '## CRITICAL: Interactive Choice Format',
+      '',
       locale === 'zh'
-        ? '当前处于需求讨论阶段。请通过提问和讨论来理解用户需求，不要直接生成架构。\n每次只问 1-2 个最关键的问题，不要一次列出所有问题。等用户回答后再继续深入。\n当你需要用户做选择时，用以下格式输出选项（不要用普通编号列表）：\n```json:user-choice\n{"question":"你的问题","options":["选项A","选项B","选项C"]}\n```\n普通的信息列表、模块清单等不要用这个格式，只在需要用户做决定时使用。\n在你的第一次回复末尾，用 <!-- title: 你总结的项目标题 --> 格式输出一个简短的项目标题（不超过15字）。这个标题对用户不可见，仅用于系统内部。'
-        : 'Ask only 1-2 key questions at a time. Wait for the user\'s answer before diving deeper.\nWhen you need the user to make a choice, output options in this format (do NOT use regular numbered lists for choices):\n```json:user-choice\n{"question":"Your question","options":["Option A","Option B","Option C"]}\n```\nDo NOT use this format for informational lists or module descriptions — only for decisions.\nAt the end of your first response, output a short project title (max 15 chars) in this hidden format: <!-- title: Your Project Title -->. This is invisible to the user, used internally only.',
+        ? '**你必须使用以下格式让用户做选择，不要用普通编号列表：**'
+        : '**You MUST use this format when asking the user to choose, NOT regular numbered lists:**',
+      '',
+      '```json:user-choice',
+      '{"question":"你的问题/Your question","options":["选项A","选项B","选项C"]}',
+      '```',
+      '',
+      locale === 'zh'
+        ? '每次只问 1-2 个问题。等用户回答后再继续。\n普通信息列表不要用这个格式，只在需要用户做决定时使用。\n\n在你的第一次回复末尾，用 <!-- title: 项目标题 --> 格式输出标题（不超过15字，对用户不可见）。'
+        : 'Ask only 1-2 questions at a time. Wait for answer before continuing.\nDo NOT use this format for informational lists — only for decisions.\n\nAt the end of your first response, output a title in <!-- title: Project Title --> format (max 15 chars, invisible to user).',
     ].filter(Boolean).join('\n')
   }
 
