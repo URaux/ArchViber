@@ -30,6 +30,7 @@ interface ChatRequest {
   customApiBase?: string
   customApiKey?: string
   customApiModel?: string
+  ccSessionId?: string  // CC session ID for resume — eliminates prompt cache cold start on follow-up turns
 }
 
 function formatHistory(history: ChatMessage[] | undefined) {
@@ -382,12 +383,15 @@ export async function POST(request: Request) {
   // }
 
   // Fallback: one-shot spawn (used for codex/gemini and any unrecognized backend)
+  // For claude-code, pass ccSessionId so CC resumes the existing session (prompt cache benefit).
   const agentId = agentRunner.spawnAgent(
     'chat',
     buildPrompt(payload),
     backend,
     process.cwd(),
-    payload.model
+    payload.model,
+    undefined,
+    backend === 'claude-code' ? payload.ccSessionId : undefined
   )
 
   let cleanup = () => undefined
@@ -396,6 +400,7 @@ export async function POST(request: Request) {
     start(controller) {
       let sentLength = 0
       let closed = false
+      let ccSessionEmitted = false
 
       const close = () => {
         if (closed) {
@@ -415,6 +420,17 @@ export async function POST(request: Request) {
         controller.enqueue(encodeEvent(event))
       }
 
+      // Extract CC session_id from the stream-json init event and emit it to the client once.
+      // CC init event looks like: {"type":"system","subtype":"init","session_id":"UUID",...}
+      const tryEmitCcSessionId = (output: string) => {
+        if (ccSessionEmitted || backend !== 'claude-code') return
+        const match = output.match(/"session_id"\s*:\s*"([0-9a-f-]{36})"/)
+        if (match) {
+          ccSessionEmitted = true
+          push({ type: 'session', ccSessionId: match[1] })
+        }
+      }
+
       const intervalId = setInterval(() => {
         const status = agentRunner.getStatus(agentId)
 
@@ -423,6 +439,8 @@ export async function POST(request: Request) {
           close()
           return
         }
+
+        tryEmitCcSessionId(status.output)
 
         const visibleText = extractAgentText(status.output)
 

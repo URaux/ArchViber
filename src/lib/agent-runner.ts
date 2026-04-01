@@ -66,7 +66,7 @@ export interface CustomApiConfig {
   customApiModel?: string
 }
 
-function getCommand(backend: AgentBackend, prompt: string, model?: string) {
+function getCommand(backend: AgentBackend, prompt: string, model?: string, ccSessionId?: string) {
   if (backend === 'codex') {
     const args = ['exec', '--full-auto', '--json', '-']
     if (model) args.push('--model', model)
@@ -90,7 +90,12 @@ function getCommand(backend: AgentBackend, prompt: string, model?: string) {
     }
   }
 
+  // claude-code backend: use --resume <id> if session exists, otherwise let CC auto-generate a new session.
+  // The session_id is extracted from the stream-json init event and returned to the client.
   const args = ['-p', '--output-format', 'stream-json', '--verbose']
+  if (ccSessionId) {
+    args.push('--resume', ccSessionId)
+  }
   if (model) args.push('--model', model)
   return { command: 'claude', args, pipeStdin: true, useShell: undefined }
 }
@@ -105,17 +110,18 @@ export class AgentRunner extends EventEmitter {
     this.on('error', () => undefined)
   }
 
-  spawnAgent(nodeId: string, prompt: string, backend: AgentBackend, workDir: string, model?: string, customApiConfig?: CustomApiConfig) {
+  spawnAgent(nodeId: string, prompt: string, backend: AgentBackend, workDir: string, model?: string, customApiConfig?: CustomApiConfig, ccSessionId?: string) {
     const agentId = `${nodeId}-${Date.now()}-${this.nextId++}`
 
     if (backend === 'custom-api') {
       return this.spawnCustomApiAgent(agentId, nodeId, prompt, model, customApiConfig)
     }
 
-    const { command, args, pipeStdin, useShell } = getCommand(backend, prompt, model)
+    const { command, args, pipeStdin, useShell } = getCommand(backend, prompt, model, ccSessionId)
     const env = { ...process.env }
 
     delete env.ANTHROPIC_API_KEY
+    env.ANTHROPIC_API_KEY = ''  // Force OAuth path; empty string overrides any inherited stale key
     delete env.GEMINI_API_KEY
 
     // Relay fallback: if USE_RELAY is set, pass relay credentials to spawned agents

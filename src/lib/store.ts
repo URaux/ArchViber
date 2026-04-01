@@ -47,6 +47,7 @@ export interface ChatSession {
   updatedAt: number
   phase: SessionPhase
   canvasSnapshot?: { nodes: Node<CanvasNodeData>[]; edges: Edge[]; projectName?: string }
+  ccSessionId?: string  // Claude Code session ID for resume (eliminates prompt cache cold start)
 }
 
 interface AppState {
@@ -100,6 +101,7 @@ interface AppState {
   setSessionPhase: (id: string, phase: SessionPhase) => void
   updateActiveChatMessages: (updater: (msgs: ChatMessage[]) => ChatMessage[]) => void
   appendSystemChatMessage: (content: string) => void
+  updateChatSession: (id: string, patch: Partial<ChatSession>) => void
 }
 
 const initialLocale = getLocale()
@@ -511,6 +513,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     set({
       chatSessions: updated.slice().sort((a, b) => b.updatedAt - a.updatedAt),
+    })
+  },
+  updateChatSession: (id, patch) => {
+    set({
+      chatSessions: get().chatSessions.map((s) =>
+        s.id === id ? { ...s, ...patch } : s
+      ),
     })
   },
 }))

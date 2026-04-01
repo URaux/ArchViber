@@ -28,6 +28,7 @@ class PersistentAgent extends EventEmitter {
 
     const env = { ...process.env }
     delete env.ANTHROPIC_API_KEY
+    env.ANTHROPIC_API_KEY = ''  // Force OAuth path; empty string overrides any inherited stale key
 
     // Relay fallback: if USE_RELAY is set, pass relay credentials
     if (process.env.USE_RELAY === 'true' && process.env.RELAY_API_BASE_URL) {

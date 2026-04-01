@@ -21,9 +21,10 @@ import type {
 type CanvasNode = Node<CanvasNodeData>
 
 interface StreamEvent {
-  type: 'chunk' | 'done' | 'error'
+  type: 'chunk' | 'done' | 'error' | 'session'
   text?: string
   error?: string
+  ccSessionId?: string
 }
 
 function buildNodeContext(
@@ -268,6 +269,7 @@ export function ChatPanel() {
   const createChatSession = useAppStore((state) => state.createChatSession)
   const setSessionPhase = useAppStore((state) => state.setSessionPhase)
   const updateActiveChatMessages = useAppStore((state) => state.updateActiveChatMessages)
+  const updateChatSession = useAppStore((state) => state.updateChatSession)
   const workDir = useAppStore((state) => state.config.workDir)
   const { applyCanvasActions, restoreSnapshot, actionErrors } = useCanvasActions()
   const [message, setMessage] = useState('')
@@ -413,6 +415,7 @@ export function ChatPanel() {
           customApiBase,
           customApiKey,
           customApiModel,
+          ccSessionId: activeSession?.ccSessionId,
         }),
       })
 
@@ -440,6 +443,12 @@ export function ChatPanel() {
         buffer = rest
 
         for (const streamEvent of events) {
+          if (streamEvent.type === 'session' && streamEvent.ccSessionId) {
+            // Save the CC session ID so subsequent messages can resume this session
+            updateChatSession(sessionId, { ccSessionId: streamEvent.ccSessionId })
+            continue
+          }
+
           if (streamEvent.type === 'chunk' && streamEvent.text) {
             fullAssistantText += streamEvent.text
             const nextVisibleText = extractVisibleChatText(fullAssistantText)
@@ -551,6 +560,7 @@ export function ChatPanel() {
           customApiBase,
           customApiKey,
           customApiModel,
+          ccSessionId: activeSession?.ccSessionId,
         }),
       })
 
@@ -575,6 +585,10 @@ export function ChatPanel() {
         buffer = rest
 
         for (const streamEvent of events) {
+          if (streamEvent.type === 'session' && streamEvent.ccSessionId) {
+            updateChatSession(sessionId, { ccSessionId: streamEvent.ccSessionId })
+            continue
+          }
           if (streamEvent.type === 'chunk' && streamEvent.text) {
             fullAssistantText += streamEvent.text
             const nextVisibleText = extractVisibleChatText(fullAssistantText)
