@@ -308,8 +308,8 @@ function layerOutputFormat(agentType: AgentType, task: TaskType, locale: Locale,
       'When you have enough information, summarize the proposed architecture in text.',
       'The user will explicitly transition to design mode when ready.',
       locale === 'zh'
-        ? '当前处于需求讨论阶段。请通过提问和讨论来理解用户需求，不要直接生成架构。\n每次只问 1-2 个最关键的问题，不要一次列出所有问题。等用户回答后再继续深入。如果有明确选项，用编号列出供用户选择（例如"1. 方案A 2. 方案B 3. 自定义输入"）。\n\n在你的第一次回复末尾，用 <!-- title: 项目标题 --> 格式输出标题（不超过15字，对用户不可见）。'
-        : 'Ask only 1-2 key questions at a time. Wait for the user\'s answer before diving deeper. When there are clear options, list them as numbered choices (e.g., "1. Option A  2. Option B  3. Custom input").\n\nAt the end of your first response, output a title in <!-- title: Project Title --> format (max 15 chars, invisible to user).',
+        ? '当前处于需求讨论阶段。请通过提问和讨论来理解用户需求，不要直接生成架构。\n严格每次只问 1 个问题，不要同时问多个问题。等用户回答后再问下一个。如果有明确选项，用编号列出 2-4 个选项供用户选择（例如"1. 方案A 2. 方案B 3. 自定义"）。选项中不要混入问题。\n\n在你的第一次回复末尾，用 <!-- title: 项目标题 --> 格式输出标题（不超过15字，对用户不可见）。'
+        : 'STRICTLY ask only 1 question per response. Do NOT ask multiple questions at once. Wait for the user\'s answer, then ask the next question. When there are clear options, list 2-4 numbered choices (e.g., "1. Option A  2. Option B  3. Custom input"). Do NOT mix questions into option lists.\n\nAt the end of your first response, output a title in <!-- title: Project Title --> format (max 15 chars, invisible to user).',
     ].filter(Boolean).join('\n')
   }
 

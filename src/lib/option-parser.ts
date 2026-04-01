@@ -63,8 +63,14 @@ export function parseOptions(content: string): ParsedOptions | null {
 
   if ((!isDecision) || isInfoList) return null
 
+  // Filter out items that look like questions (not selectable options)
+  const actualOptions = options.filter(o => !/[？?]\s*$/.test(o.text.trim()))
+
+  // Need at least 2 actual options after filtering
+  if (actualOptions.length < 2) return null
+
   // Strip markdown formatting from option text for cleaner card display
-  const cleanOptions = options.map(o => ({
+  const cleanOptions = actualOptions.map(o => ({
     number: o.number,
     text: o.text
       .replace(/\*\*(.+?)\*\*/g, '$1')  // remove bold
