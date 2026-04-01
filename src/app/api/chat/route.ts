@@ -371,16 +371,15 @@ export async function POST(request: Request) {
     return handleCustomApiChat(request, payload)
   }
 
-  // Persistent agent path: keep claude process alive between messages.
-  // First message pays the cold-start cost; subsequent messages are near-instant.
-  // Falls back to one-shot spawn if persistent agent fails.
-  if (backend === 'claude-code') {
-    try {
-      return await handlePersistentChat(request, payload, backend)
-    } catch {
-      // Persistent agent failed — fall through to one-shot spawn
-    }
-  }
+  // Persistent agent path: DISABLED for now — CC interactive mode stdin issues on Windows.
+  // TODO: debug and re-enable. See persistent-agent.ts.
+  // if (backend === 'claude-code') {
+  //   try {
+  //     return await handlePersistentChat(request, payload, backend)
+  //   } catch {
+  //     // Persistent agent failed — fall through to one-shot spawn
+  //   }
+  // }
 
   // Fallback: one-shot spawn (used for codex/gemini and any unrecognized backend)
   const agentId = agentRunner.spawnAgent(
