@@ -191,6 +191,10 @@ npm install -g @google/gemini-cli          # Gemini CLI
 
 ---
 
+## Friends
+
+- [LINUX DO](https://linux.do/) — 真正的技术社区
+
 ## License
 
 MIT
