@@ -62,8 +62,9 @@
 
 | 能力 | 为什么值得关注 |
 |---|---|
-| **AI 头脑风暴工作流** | 三阶段渐进推进（brainstorm → design → iterate），AI 主动追问直到方案确认，而不是一次性生成 |
+| **AI 头脑风暴工作流** | 三阶段渐进推进（brainstorm → design → iterate），6 维度结构化提问 + 8 轮收敛机制，AI 主动追问直到方案确认 |
 | **2-Agent 架构** | 设计和构建分离——AI 在讨论阶段不会乱改你的画布，构建阶段才获得写权限。7 层 context stack 确保 AI 永远不丢失上下文 |
+| **数据建模** | 架构节点内嵌 Schema Contract（表/列/索引/约束），10 条规则自动校验，跨服务 FK 通过 Edge 层表达 |
 | **构建进度实时可见** | 构建状态自动出现在对话中，你可以直接追问"为什么这个模块构建失败了？"，AI 知道答案 |
 | **15+ 内置技能 + GitHub 一键导入** | 告诉 AI 你用 Next.js，它自动匹配最优构建技能。还能从 GitHub 一键导入社区技能 |
 | **导入代码库秒速反向生成架构** | 把现有项目拖进来，秒速生成架构图，后台 AI 自动补充描述和关系 |
@@ -90,6 +91,7 @@
 |---|---|
 | AI 对话 | 与 AI 讨论架构方案，AI 可直接修改画布（canvas-action） |
 | 三阶段会话工作流 | brainstorm → design → iterate 渐进式推进 |
+| 头脑风暴收敛 | 6 维度结构化提问（目标/用户/功能/技术栈/数据模型/集成），8 轮上限自动收敛，进度实时显示 |
 | Context Engineering | 7 层 context stack，2-agent 架构（Canvas Agent + Build Agent） |
 | Chat-Build 联动 | Chat agent 实时感知 build 状态，构建事件自动插入对话 |
 | Markdown 渲染 | 代码高亮、GFM 表格、代码块语法着色 |
@@ -101,12 +103,23 @@
 | 功能 | 描述 |
 |---|---|
 | 一键构建 Build All | 拓扑排序波次并行生成代码，最大化并发 |
+| 自动完整性检查 | 生成架构后自动检测缺失的连线和数据 Schema，自动追问补全 |
 | 三种 AI 后端 | Claude Code / Codex / Gemini CLI，按需切换 |
 | Skill 系统 | 15+ 内置技能 + GitHub 导入 + 本地导入，techStack 自动匹配 |
 | Post-build hooks | Skill 可定义构建后自动执行的命令（如 lint、测试） |
 | Build 进度面板 | 实时波次进度、节点动画、趣味加载文字 |
 | Build 断线重连 | 刷新页面后自动恢复 build 状态 |
 | SSE 实时流 | Server-Sent Events 推送构建输出和状态变更 |
+
+### 数据建模
+
+| 功能 | 描述 |
+|---|---|
+| Schema Contract | 架构节点内嵌数据库表定义（表/列/索引/约束），AI 生成代码时严格遵守 |
+| Schema Editor | 可视化编辑表结构，PK 琥珀色 / FK 蓝色高亮，支持增删改 |
+| Schema Linter | 10 条自动校验规则（类型安全、命名规范、约束完整性、反模式检测） |
+| 跨服务 FK | 微服务间外键通过 Edge 层表达，自动提取和校验跨 Block 数据依赖 |
+| Schema 设计准则 | 8 大类准则注入 AI prompt（命名/必备列/类型选择/约束/索引/反模式/跨服务/参考范式） |
 
 ### 导入 / 导出
 
@@ -119,7 +132,8 @@
 
 - **多语言** — 中英双语 i18n
 - **进度组件** — StatusBar 内嵌自动进度计算
-- **自动保存** — 本地工作区自动持久化
+- **自动保存** — IndexedDB 主存储（50MB+）+ localStorage 备份，双写防丢，页面关闭前强制刷盘
+- **会话导出/导入** — JSON 格式备份和恢复所有对话历史
 
 ---
 
@@ -136,7 +150,7 @@
 | Agent 执行 | Node.js `child_process.spawn` |
 | Markdown | react-markdown + rehype-highlight + remark-gfm |
 | YAML 序列化 | `yaml` v2 |
-| 测试 | Vitest v4 + Testing Library |
+| 测试 | Vitest v4 + Playwright + Testing Library |
 | 语言 | TypeScript |
 
 ---
