@@ -3,8 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "archviber": "next dev",
-    "dev": "next dev",
+    "archviber": "next dev --webpack",
+    "dev": "next dev --webpack",
+    "dev:turbo": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
     "test": "vitest run",
@@ -23,6 +24,7 @@
     "remark-gfm": "^4.0.1",
     "ws": "^8.20.0",
     "yaml": "^2.8.3",
+    "zod": "^4.3.6",
     "zustand": "^5.0.12"
   },
   "devDependencies": {
