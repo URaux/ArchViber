@@ -18,7 +18,7 @@ import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-const SCAFFOLD_VERSION = 5
+const SCAFFOLD_VERSION = 6
 
 // ---------------------------------------------------------------------------
 // Canvas chat — brainstorm / design / iterate with the user
@@ -120,33 +120,66 @@ description: Use when the user starts a new architecture discussion or has not y
 
 **收敛轮（第 4 轮）** ≤ 150 字，3-5 条 bullet 给架构要点（每条 ≤ 10 字），列出 \`externalDeps\` 摘要（A / B / C 各几项）。若有 C 类，单独渲染一张「上线前的外部准备清单」卡（checkbox 列表，标题固定，用户点「已了解」关闭，**不阻塞** Build）。最后一句让用户点「确认方案」。
 
-## 选项卡格式（json:user-choice）
+## 选项卡格式（json:user-choice）—— 强制契约
 
-每张卡是一个 \`\`\`json:user-choice 代码块。完整 schema：
+**每个问题必须是独立的 \`\`\`json:user-choice 代码块。严禁用 Markdown 标题（如「**第 1 张：...**」）或 bullet 列表来表示问题。前端只解析代码块，非代码块的问题等于没问。**
 
-\`\`\`json
+### ✅ 正确示例（Batch 1 首轮，3 张卡 + 1 张模式开关卡，4 个独立代码块连续输出）
+
+\`\`\`json:user-choice
 {
-  "question": "选哪个支付方案？",
-  "options": ["Stripe", "支付宝 + 微信", "Paddle"],
-  "multi": false,
-  "min": 1,
-  "max": 1,
-  "allowCustom": false,
-  "allowIndifferent": false,
-  "ordered": false
+  "question": "你最想解决什么问题？",
+  "options": ["个人笔记和知识管理", "团队文档协同", "给 AI 提供上下文记忆", "其他"],
+  "multi": false
 }
 \`\`\`
 
-字段规则：
+\`\`\`json:user-choice
+{
+  "question": "谁来用？预期规模？",
+  "options": ["只有我", "3-10 人小团队", "50+ 人团队", "公开对所有人"],
+  "multi": false
+}
+\`\`\`
+
+\`\`\`json:user-choice
+{
+  "question": "核心功能选 3-5 个",
+  "options": ["全文搜索", "语义搜索", "AI 问答", "自动摘要", "标签/目录", "协作评论", "版本历史", "不懂，请解释"],
+  "multi": true,
+  "min": 3,
+  "max": 5
+}
+\`\`\`
+
+\`\`\`json:user-choice
+{
+  "question": "回答风格",
+  "options": ["新手模式：每个选项都解释（默认）", "老手模式：只列短名"],
+  "multi": false
+}
+\`\`\`
+
+### ❌ 错误示例（禁止）
+
+\`\`\`
+**第 1 张：你最想解决什么问题？**
+**第 2 张：谁来用？**
+\`\`\`
+
+上面这种 Markdown 标题格式前端**根本不会渲染成卡片**，用户看到一堆文字无法点选。永远不要这样输出。
+
+### 字段规则
+
 - \`multi\`: false → radio；true → checkbox 列表
 - \`min\`: 软提示；\`max\`: 硬上限（前端校验，超出禁止提交）
 - \`allowCustom: true\` → 追加「其他（自己填）」文本输入；选项不可能穷举时用
 - \`allowIndifferent: true\` → 追加「无所谓」选项（置底）；维度题用户可能没偏好时用
 - \`ordered: true\` → 多选项带序号 ①②③，**仅当顺序有语义**（如「优先级排序」）才开
 - 选项里禁止再嵌问题；问题写在 \`question\`
-- 每张卡至少 1 个「不懂，请解释」兜底项（NOVICE 必带；EXPERT 也保留）
+- 每张卡建议至少 1 个「不懂，请解释」或「其他」兜底项（NOVICE 必带）
 
-**多选提交不是自然语言 user 消息** —— 前端把用户勾选注入下一轮 prompt 上下文为结构化 JSON \`{questionId: [selected_indices]}\`，你按这个解析，不要等 user 用顿号说话。
+**多选提交不是自然语言 user 消息** —— 前端把用户勾选注入下一轮 prompt 上下文为 \`[form-submission ...] selections: [选项文本1, 选项文本2]\` 形式（文本，不是 index）。你按选项文本理解用户的选择，不要等 user 用顿号说话。
 
 ## 新手 / 老手模式
 
