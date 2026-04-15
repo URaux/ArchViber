@@ -15,7 +15,7 @@ import { z } from 'zod'
  *     LLM has a stable memory anchor across long novice conversations.
  *
  * The eventLog grows up to 20 entries before being compacted into a fresh
- * snapshot of `externalDeps` (last-write-wins keyed by `service+envVar`).
+ * snapshot of `externalDeps` (last-write-wins keyed by `service+type+envVar`).
  */
 
 const BRAINSTORM_STATE_DIR = 'brainstorm-state'
@@ -33,6 +33,7 @@ const externalDepSchema = z
     group: z.string().optional(),
     docsUrl: z.string().optional(),
     notes: z.string().optional(),
+    action: z.string().optional(),
   })
   .strict()
 
@@ -40,7 +41,7 @@ const externalDepSchema = z
  * An event in the externalDeps stream. Events are append-only until compacted.
  *
  * `op` describes the intent:
- *   - `add` / `update`: upsert a dep keyed by `service + envVar`
+ *   - `add` / `update`: upsert a dep keyed by `service + type` (+ envVar when set)
  *   - `remove`: drop matching dep from the snapshot
  */
 const externalDepsEventSchema = z
@@ -53,6 +54,8 @@ const externalDepsEventSchema = z
     group: z.string().optional(),
     docsUrl: z.string().optional(),
     notes: z.string().optional(),
+    action: z.string().optional(),
+    note: z.string().optional(),
     ts: z.string().optional(),
   })
   .strict()
@@ -181,19 +184,29 @@ export async function writeBrainstormState(
 
 /**
  * Reduce a sequence of externalDeps events into a snapshot. Last-write-wins,
- * keyed by `service + envVar` (envVar can be empty for non-env-var deps).
+ * keyed by `service + type + envVar` so that (a) OAuth apps and compliance
+ * entries that share a service name but differ in kind don't collide, and
+ * (b) an api_key type with a distinct envVar still stays separate.
  */
 function reduceEventsToSnapshot(
   baseSnapshot: ExternalDep[],
   events: ExternalDepsEvent[],
 ): ExternalDep[] {
-  const key = (service: string, envVar?: string) => `${service}::${envVar ?? ''}`
+  const key = (service: string, type: string | undefined, envVar?: string) =>
+    `${service}::${type ?? ''}::${envVar ?? ''}`
   const map = new Map<string, ExternalDep>()
   for (const dep of baseSnapshot) {
-    map.set(key(dep.service, dep.envVar), dep)
+    map.set(key(dep.service, dep.type, dep.envVar), dep)
+  }
+  const resolveKey = (service: string, type?: string, envVar?: string): string => {
+    if (type) return key(service, type, envVar)
+    for (const [k, dep] of map) {
+      if (dep.service === service && (dep.envVar ?? '') === (envVar ?? '')) return k
+    }
+    return key(service, undefined, envVar)
   }
   for (const ev of events) {
-    const k = key(ev.service, ev.envVar)
+    const k = resolveKey(ev.service, ev.type, ev.envVar)
     if (ev.op === 'remove') {
       map.delete(k)
       continue
@@ -206,7 +219,8 @@ function reduceEventsToSnapshot(
       envVar: ev.envVar ?? existing?.envVar,
       group: ev.group ?? existing?.group,
       docsUrl: ev.docsUrl ?? existing?.docsUrl,
-      notes: ev.notes ?? existing?.notes,
+      notes: ev.note ?? ev.notes ?? existing?.notes,
+      action: ev.action ?? existing?.action,
     }
     map.set(k, merged)
   }
@@ -389,7 +403,7 @@ export interface ParsedAssistantControl {
   decisionsPatch?: BrainstormDecisions
 }
 
-const PROGRESS_RE = /<!--\s*progress:\s*([^>]*?)-->/gi
+const PROGRESS_RE = /<!--\s*progress:\s*([\s\S]*?)-->/gi
 // NOTE: capture non-greedily up to the comment close `-->` (not the first
 // matching bracket). Prior versions used `(\[...?\])` / `(\{...?\})` which
 // truncated payloads containing nested objects or a `]`/`}` inside a string
