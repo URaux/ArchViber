@@ -12,7 +12,7 @@ import { readIrFile } from '@/lib/ir/persist'
 import type { Ir } from '@/lib/ir'
 import {
   readBrainstormState,
-  writeBrainstormState,
+  updateBrainstormState,
   createInitialBrainstormState,
   formatStateForPrompt,
   parseAssistantControlComments,
@@ -97,6 +97,10 @@ async function loadOrInitBrainstormState(payload: ChatRequest): Promise<Brainsto
  * Parse control comments out of the streamed assistant response and persist
  * the updated brainstorm state. Best-effort: failures log but never throw,
  * so persistence problems can't break the user-visible chat stream.
+ *
+ * Serialized per sessionId via `updateBrainstormState` — concurrent requests
+ * (double-submit, retry, multiple tabs) are chained so no turn's events are
+ * silently overwritten by a stale-snapshot last-write-wins race.
  */
 async function persistBrainstormStateFromResponse(
   state: BrainstormState | null,
@@ -105,8 +109,12 @@ async function persistBrainstormStateFromResponse(
   if (!state) return
   try {
     const control = parseAssistantControlComments(fullText)
-    const next = applyAssistantControl(state, control)
-    await writeBrainstormState(process.cwd(), next)
+    await updateBrainstormState(process.cwd(), state.sessionId, (current) => {
+      // If another writer raced ahead, rebase our delta on top of their
+      // state rather than the stale `state` captured at request start.
+      const base = current ?? state
+      return applyAssistantControl(base, control)
+    })
   } catch (err) {
     console.warn('[chat] brainstorm-state persist failed:', err)
   }

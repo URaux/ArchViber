@@ -10,6 +10,7 @@ import {
   formatStateForPrompt,
   parseAssistantControlComments,
   readBrainstormState,
+  updateBrainstormState,
   writeBrainstormState,
   type ExternalDepsEvent,
 } from '@/lib/brainstorm/state'
@@ -171,5 +172,77 @@ describe('brainstorm state — prompt formatting', () => {
 describe('brainstorm state — sessionId sanitization', () => {
   it('rejects path traversal in sessionId', () => {
     expect(() => brainstormStateFilePath(tmpDir, '../evil')).toThrow(/Invalid sessionId/)
+  })
+})
+
+describe('brainstorm state — control-comment parsing regressions', () => {
+  it('parses decisions with nested tech_preferences (no truncation at first `}`)', () => {
+    const response =
+      '<!-- decisions: {"tech_preferences":{"db":"postgres","auth":"clerk"},"domain":"shop"} -->'
+    const parsed = parseAssistantControlComments(response)
+    expect(parsed.decisionsPatch?.domain).toBe('shop')
+    expect(parsed.decisionsPatch?.tech_preferences).toEqual({
+      db: 'postgres',
+      auth: 'clerk',
+    })
+  })
+
+  it('parses externalDeps whose notes contain a bracket (no truncation at first `]`)', () => {
+    const response =
+      '<!-- externalDeps: [{"op":"add","service":"stripe","type":"api_key","status":"needed","envVar":"STRIPE_KEY","notes":"see [docs] here"}] -->'
+    const parsed = parseAssistantControlComments(response)
+    expect(parsed.externalDepsEvents).toHaveLength(1)
+    expect(parsed.externalDepsEvents[0].notes).toBe('see [docs] here')
+  })
+
+  it('deep-merges tech_preferences across turns instead of clobbering prior keys', () => {
+    let state = createInitialBrainstormState('s-tech')
+    state = applyAssistantControl(state, {
+      externalDepsEvents: [],
+      decisionsPatch: { tech_preferences: { auth: 'clerk' } },
+    })
+    state = applyAssistantControl(state, {
+      externalDepsEvents: [],
+      decisionsPatch: { tech_preferences: { db: 'postgres' } },
+    })
+    expect(state.decisions.tech_preferences).toEqual({ auth: 'clerk', db: 'postgres' })
+  })
+})
+
+describe('brainstorm state — concurrent update serialization', () => {
+  it('serializes concurrent updateBrainstormState calls for the same sessionId', async () => {
+    const sessionId = 'concurrent-session'
+    // Seed an initial state on disk so both updaters read a known baseline.
+    await writeBrainstormState(tmpDir, createInitialBrainstormState(sessionId))
+
+    // Fire two overlapping updates that each push a distinct externalDep.
+    // Without serialization, both would read the empty baseline and the
+    // second write would clobber the first.
+    const [r1, r2] = await Promise.all([
+      updateBrainstormState(tmpDir, sessionId, (current) => {
+        const base = current ?? createInitialBrainstormState(sessionId)
+        return applyAssistantControl(base, {
+          externalDepsEvents: [
+            { op: 'add', service: 'alpha', type: 'api_key', status: 'needed', envVar: 'ALPHA_KEY' },
+          ],
+        })
+      }),
+      updateBrainstormState(tmpDir, sessionId, (current) => {
+        const base = current ?? createInitialBrainstormState(sessionId)
+        return applyAssistantControl(base, {
+          externalDepsEvents: [
+            { op: 'add', service: 'beta', type: 'api_key', status: 'needed', envVar: 'BETA_KEY' },
+          ],
+        })
+      }),
+    ])
+
+    expect(r1).not.toBeNull()
+    expect(r2).not.toBeNull()
+
+    const final = await readBrainstormState(tmpDir, sessionId)
+    expect(final).not.toBeNull()
+    const services = final!.externalDeps.map((d) => d.service).sort()
+    expect(services).toEqual(['alpha', 'beta'])
   })
 })

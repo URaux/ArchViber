@@ -18,7 +18,7 @@ import { z } from 'zod'
  * snapshot of `externalDeps` (last-write-wins keyed by `service+envVar`).
  */
 
-export const BRAINSTORM_STATE_DIR = path.join('.archviber', 'brainstorm-state')
+const BRAINSTORM_STATE_DIR = 'brainstorm-state'
 
 const EVENT_LOG_COMPACT_THRESHOLD = 20
 
@@ -89,7 +89,7 @@ export type BrainstormState = z.infer<typeof brainstormStateSchema>
 /* ------------------------------------------------------------------ paths --- */
 
 function stateDirPath(projectRoot: string): string {
-  return path.join(projectRoot, BRAINSTORM_STATE_DIR)
+  return path.join(projectRoot, '.archviber', BRAINSTORM_STATE_DIR)
 }
 
 /**
@@ -316,6 +316,63 @@ export function formatStateForPrompt(state: BrainstormState): string {
   return lines.join('\n')
 }
 
+/* ----------------------------------------------- concurrency serialization --- */
+
+/**
+ * Per-sessionId mutex. Concurrent chat requests for the same sessionId are a
+ * realistic failure mode (user double-clicks send, retries after a hang, or
+ * opens two tabs). Without serialization, each request does its own
+ * read → apply → write and the last writer silently overwrites the first,
+ * losing an entire turn's externalDeps events / decisions patch.
+ *
+ * We key on `${projectRoot}::${sessionId}` (already sanitized by path helper)
+ * and chain updates onto a promise so only one read-modify-write is in flight
+ * at a time per session. Entries are cleaned up once the tail settles.
+ */
+const sessionUpdateLocks = new Map<string, Promise<void>>()
+
+function lockKey(projectRoot: string, sessionId: string): string {
+  return `${projectRoot}::${sanitizeSessionId(sessionId)}`
+}
+
+/**
+ * Serialized read-modify-write for a single sessionId. The updater receives
+ * the current state (or `null` if no file exists yet) and must return the
+ * next state to persist, or `null` to skip writing. Guarantees at most one
+ * in-flight update per (projectRoot, sessionId).
+ */
+export async function updateBrainstormState(
+  projectRoot: string,
+  sessionId: string,
+  updater: (current: BrainstormState | null) => BrainstormState | null | Promise<BrainstormState | null>,
+): Promise<BrainstormState | null> {
+  const key = lockKey(projectRoot, sessionId)
+  const prev = sessionUpdateLocks.get(key) ?? Promise.resolve()
+
+  let result: BrainstormState | null = null
+  const next = prev
+    .catch(() => undefined) // never let a prior failure poison the chain
+    .then(async () => {
+      const current = await readBrainstormState(projectRoot, sessionId)
+      const proposed = await updater(current)
+      if (proposed === null) return
+      await writeBrainstormState(projectRoot, proposed)
+      result = proposed
+    })
+
+  sessionUpdateLocks.set(key, next)
+  try {
+    await next
+    return result
+  } finally {
+    // Only clear the slot if we're still the tail; a newer caller may have
+    // chained onto `next` and replaced the entry already.
+    if (sessionUpdateLocks.get(key) === next) {
+      sessionUpdateLocks.delete(key)
+    }
+  }
+}
+
 /* ---------------------------------------------- assistant-output parsing --- */
 
 /**
@@ -333,8 +390,14 @@ export interface ParsedAssistantControl {
 }
 
 const PROGRESS_RE = /<!--\s*progress:\s*([^>]*?)-->/gi
-const EXTERNAL_DEPS_RE = /<!--\s*externalDeps:\s*(\[[\s\S]*?\])\s*-->/gi
-const DECISIONS_RE = /<!--\s*decisions:\s*(\{[\s\S]*?\})\s*-->/gi
+// NOTE: capture non-greedily up to the comment close `-->` (not the first
+// matching bracket). Prior versions used `(\[...?\])` / `(\{...?\})` which
+// truncated payloads containing nested objects or a `]`/`}` inside a string
+// (e.g. `tech_preferences:{db:"postgres"}` or `notes:"see [docs]"`), causing
+// silent data loss of control state. We now grab the whole comment body and
+// let JSON.parse validate structure.
+const EXTERNAL_DEPS_RE = /<!--\s*externalDeps:\s*([\s\S]*?)\s*-->/gi
+const DECISIONS_RE = /<!--\s*decisions:\s*([\s\S]*?)\s*-->/gi
 
 function parseProgressBody(body: string): ParsedAssistantControl['progress'] {
   // Tokens look like `batch=how round=3 mode=novice`. Tolerate quotes.
@@ -418,9 +481,23 @@ export function applyAssistantControl(
   }
 
   if (control.decisionsPatch) {
+    // Shallow-merge top level, but DEEP-merge `tech_preferences` so
+    // incremental turns (turn 1: {auth: "clerk"}, turn 2: {db: "postgres"})
+    // accumulate instead of clobbering. Other fields (domain/scale/features)
+    // are intentionally last-write-wins — the LLM re-emits them whole.
+    const prevTech = next.decisions.tech_preferences
+    const patchTech = control.decisionsPatch.tech_preferences
+    const mergedTech =
+      prevTech || patchTech
+        ? { ...(prevTech ?? {}), ...(patchTech ?? {}) }
+        : undefined
     next = {
       ...next,
-      decisions: { ...next.decisions, ...control.decisionsPatch },
+      decisions: {
+        ...next.decisions,
+        ...control.decisionsPatch,
+        ...(mergedTech ? { tech_preferences: mergedTech } : {}),
+      },
     }
   }
 
