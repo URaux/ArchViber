@@ -1,6 +1,6 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { IrValidationError, irFilePath, readIrFile, writeIrFile } from '@/lib/ir'
+import { IrValidationError, irFilePath, readIrFile, writeIrFile } from '@/lib/ir/persist'
 import { irSchema } from '@/lib/ir/schema'
 
 export const runtime = 'nodejs'

@@ -1,5 +1,5 @@
 import type { Ir } from './schema'
-import { serializeIr } from './persist'
+import { serializeIr } from './serialize'
 
 export type PostIr = (ir: Ir) => Promise<{ ok: boolean; mtime?: number; error?: string }>
 

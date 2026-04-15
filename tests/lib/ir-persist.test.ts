@@ -5,15 +5,12 @@ import path from 'path'
 import {
   readIrFile,
   writeIrFile,
-  parseIr,
-  serializeIr,
   irFilePath,
-  IrValidationError,
   IR_DIR_NAME,
   IR_FILE_NAME,
-  IR_VERSION,
-  type Ir,
-} from '@/lib/ir'
+} from '@/lib/ir/persist'
+import { parseIr, serializeIr, IrValidationError } from '@/lib/ir/serialize'
+import { IR_VERSION, type Ir } from '@/lib/ir/schema'
 
 let tmpDir: string
 
