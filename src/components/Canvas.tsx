@@ -159,12 +159,12 @@ function mergeSchemas(schemas: BlockSchema[]) {
   return tables.length > 0 ? { tables } : undefined
 }
 
-function normalizeTableKey(name: string) {
-  return name.trim().toLowerCase()
+function normalizeTableKey(name: string | undefined) {
+  return typeof name === 'string' ? name.trim().toLowerCase() : ''
 }
 
-function normalizeColumnKey(name: string) {
-  return name.trim().toLowerCase()
+function normalizeColumnKey(name: string | undefined) {
+  return typeof name === 'string' ? name.trim().toLowerCase() : ''
 }
 
 function buildNormalizedFieldRefMap(fieldRefs: Record<string, string[]> | undefined) {
