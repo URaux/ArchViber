@@ -18,7 +18,7 @@ import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-const SCAFFOLD_VERSION = 4
+const SCAFFOLD_VERSION = 5
 
 // ---------------------------------------------------------------------------
 // Canvas chat — brainstorm / design / iterate with the user
@@ -94,45 +94,129 @@ architecture, do not emit JSON — answer in prose.
 
 const CANVAS_BRAINSTORM_SKILL_MD = `---
 name: archviber-brainstorm
-description: Use when the user starts a new architecture discussion or has not yet confirmed a design. Guides requirement discovery through six dimensions with one question per turn, then converges to a short summary.
+description: Use when the user starts a new architecture discussion or has not yet confirmed a design. Batches requirement discovery into WHAT / HOW / DEPS layers, surfaces external-dependency needs as they emerge, and adapts vocabulary to the user's expertise level.
 ---
 
-# 需求讨论协议
+# 需求讨论协议 v2
 
-一次问 1 个问题。按以下 6 个维度顺序推进：
+按 3 个批次推进 + 1 收敛轮。每批是一条助手消息里多张 \`json:user-choice\` 卡。独立维度同批并发，依赖关系才串行。
 
-1. 目标：系统要解决什么问题？
-2. 用户与规模：谁用？预期量级？
-3. 核心功能：最重要的 3-5 个功能？
-4. 技术栈偏好：必用或必避的？
-5. 数据模型：核心实体/表长什么样？
-6. 约束：对接哪些外部系统？硬限制？
+## 批次结构
 
-用户的回答已覆盖某个维度就直接跳到下一个。不要堆砌问题。
+**Batch 1 · WHAT 层（首轮，恒发）** 3 张卡，互相独立：
+1. 目标（系统要解决什么问题）
+2. 用户与规模（谁用、量级）
+3. 核心功能（3-5 个，多选）
 
-## 选项卡片
+**Batch 2 · HOW 层（第 2 轮，按 batch1 的领域定形）** 3-4 张卡，领域相关：
+- 电商：支付 / 库存 / 物流 / 营销
+- 个人知识库：LLM / Embedding / 向量库 / 数据源
+- SaaS：多租户 / 计费 / SSO / 审计
+- 通用兜底：技术栈 / 数据模型 / 集成
 
-有明确候选时用编号列 2-4 个选项供用户选择。选项中不要混入问题。
+卡片同批并发，但内容必须由 batch1 的答案推导，不发与领域无关的卡。
 
-## 轮数与收敛
+**Batch 3 · DEPS 澄清（第 3 轮，仅当需要）** 0-4 张卡，专问 batch2 暴露出来的外部依赖（key、域名、OAuth 应用、采购审批等）。没有就跳过。
 
-最多 8 轮。第 7 轮起只追问关键缺失。第 8 轮必须收敛，不再提问。
+**收敛轮（第 4 轮）** ≤ 150 字，3-5 条 bullet 给架构要点（每条 ≤ 10 字），列出 \`externalDeps\` 摘要（A / B / C 各几项）。若有 C 类，单独渲染一张「上线前的外部准备清单」卡（checkbox 列表，标题固定，用户点「已了解」关闭，**不阻塞** Build）。最后一句让用户点「确认方案」。
 
-收敛格式（全文 ≤ 150 字）：
+## 选项卡格式（json:user-choice）
 
-- 第 1 行明确写"信息已足够收敛"
-- 3-5 个短 bullet 给架构要点（每条 ≤ 10 字，例如"前端 Next.js"、"数据层 Postgres + Qdrant"）
-- 最后一句请用户点"确认方案"按钮进入 design 阶段
+每张卡是一个 \`\`\`json:user-choice 代码块。完整 schema：
 
-禁止：代码、schema 细节、分层解释、长篇架构方案 —— 这些留给 design 阶段生成。
+\`\`\`json
+{
+  "question": "选哪个支付方案？",
+  "options": ["Stripe", "支付宝 + 微信", "Paddle"],
+  "multi": false,
+  "min": 1,
+  "max": 1,
+  "allowCustom": false,
+  "allowIndifferent": false,
+  "ordered": false
+}
+\`\`\`
+
+字段规则：
+- \`multi\`: false → radio；true → checkbox 列表
+- \`min\`: 软提示；\`max\`: 硬上限（前端校验，超出禁止提交）
+- \`allowCustom: true\` → 追加「其他（自己填）」文本输入；选项不可能穷举时用
+- \`allowIndifferent: true\` → 追加「无所谓」选项（置底）；维度题用户可能没偏好时用
+- \`ordered: true\` → 多选项带序号 ①②③，**仅当顺序有语义**（如「优先级排序」）才开
+- 选项里禁止再嵌问题；问题写在 \`question\`
+- 每张卡至少 1 个「不懂，请解释」兜底项（NOVICE 必带；EXPERT 也保留）
+
+**多选提交不是自然语言 user 消息** —— 前端把用户勾选注入下一轮 prompt 上下文为结构化 JSON \`{questionId: [selected_indices]}\`，你按这个解析，不要等 user 用顿号说话。
+
+## 新手 / 老手模式
+
+**默认 NOVICE。** 每个选项 = 短名 + 一句白话解释，长度 ≤ 40 字：
+> \`Stripe — 美国支付公司，国际卡好但国内主体要求高，月费 0、每笔 2.9%\`
+
+**首轮末尾恒发模式开关卡（无论校准结果）**：
+\`\`\`json
+{
+  "question": "回答风格",
+  "options": ["新手模式：每个选项都解释（默认）", "老手模式：只列短名"]
+}
+\`\`\`
+用户选了之后整个会话粘住，记录到回复尾的 \`<!-- mode: novice|expert -->\`。
+
+**校准信号（仅看用户首条消息的 TONE，用于猜首轮默认值）**：
+- EXPERT 线索：主动出现具体技术名（Postgres / Qdrant / OAuth2）、缩写、企业黑话
+- NOVICE 线索：白话描述目标、零技术词、问句
+
+## 离题与回归主线
+
+允许用户随时支线提问解释概念，正常回答。但**每次解释结尾必须**：
+1. 一句话回到主线（「回到刚才的支付选择」）
+2. 重新粘贴当前 batch 的 \`json:user-choice\` 卡（从注入的 \`brainstorm-state.json\` 取 currentBatch）
+
+不设硬轮数上限；锚点是 state 里的 currentBatch。
+
+## 外部依赖事件流
+
+每收到答复，内省一次：「这一步是否引入了外部服务 / 凭证 / 账号需求？」是 → 当批补一张依赖澄清卡。
+
+依赖三类：
+- **A · data-input** — API key / 配置值 / OAuth secret（用户填进 .env 即可）
+- **B · human-action** — OAuth 应用注册 / 账号开通 / 域名 / 支付主体（要去某处操作）
+- **C · compliance** — 法务 / 合规 / 采购流程（**不阻塞构建**，收敛轮统一提示）
+
+每次回复尾追加（不重写）一条 HTML 注释，**事件流**（op:add / op:remove），dedupe key = \`service + type\`：
+
+\`\`\`
+<!-- externalDeps: [
+  {"service":"stripe","type":"api_key","group":"A","op":"add","envVar":"STRIPE_SECRET_KEY","docsUrl":"https://stripe.com/docs/keys"},
+  {"service":"github","type":"oauth_app","group":"B","op":"add","action":"github.com/settings/developers 注册"},
+  {"service":"icp_filing","type":"compliance","group":"C","op":"add","note":"国内主体上线前需 ICP 备案"},
+  {"service":"stripe","type":"api_key","op":"remove","reason":"用户改选 Paddle"}
+] -->
+\`\`\`
+
+规则：
+- **不重复发已在注入 state 里的条目** —— 检查 state，已存在就跳过
+- 用 \`op:remove\` 作废之前的决定（如方案改了），不要原地改
+- 前端每 20 个事件压缩成快照，你只管追加事件
 
 ## 进度标记
 
-每次回复末尾附不可见 HTML 注释：
-\`<!-- progress: dimensions_covered=N/6 round=N/8 -->\`
+每次回复尾固定附：
+\`<!-- progress: batch=N/3 round=N mode=novice|expert -->\`
 
-第一次回复末尾额外输出标题：
+首轮额外：
 \`<!-- title: 项目标题 -->\`（≤ 15 字）
+
+## 状态注入
+
+\`<!-- state-pointer: brainstorm-state.json —— 前端每轮把当前 state（currentBatch / answeredCards / externalDeps 快照 / mode）注入 prompt 上下文，按它判断当前进度，不要凭对话历史猜。 -->\`
+
+## 边界
+
+- 禁止在 brainstorm 阶段写代码、贴 schema、画分层架构 —— 留给 design 阶段
+- 同批的卡互相独立；有依赖就拆下一批
+- 收敛轮不再发卡（C 类清单卡除外）
+- C 类不阻塞 Build；只在收敛轮提示
 `
 
 // ---------------------------------------------------------------------------
