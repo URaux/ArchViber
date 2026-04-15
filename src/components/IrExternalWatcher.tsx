@@ -209,12 +209,11 @@ export function IrExternalWatcher() {
               id="ir-watcher-title"
               className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-800"
             >
-              External file change detected
+              检测到外部改动
             </h2>
           </div>
           <p className="mb-4 text-sm text-slate-600">
-            The architecture file on disk was modified externally (e.g. via git pull or IDE
-            edit). You have unsaved local changes. Choose how to proceed:
+            磁盘上的架构文件被外部改动了（比如 git pull 或 IDE 里直接编辑）。你本地有未保存的改动，请选择：
           </p>
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
             <button
@@ -222,14 +221,14 @@ export function IrExternalWatcher() {
               onClick={() => handleKeepLocal(dialog.mtime)}
               className="vp-button-secondary rounded-xl px-4 py-2 text-sm font-medium"
             >
-              Keep Local + Overwrite On Save
+              保留本地（下次保存会覆盖磁盘）
             </button>
             <button
               type="button"
               onClick={handleDiscardAndReload}
               className="vp-button-primary rounded-xl px-4 py-2 text-sm font-medium"
             >
-              Discard &amp; Reload
+              丢弃本地并重载
             </button>
           </div>
         </div>
@@ -261,11 +260,11 @@ export function IrExternalWatcher() {
             id="ir-watcher-title"
             className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-700"
           >
-            Architecture updated externally
+            架构已被外部更新
           </h2>
         </div>
         <p className="mb-3 text-sm text-slate-500">
-          The architecture file was modified on disk. Reload to sync?
+          磁盘上的架构文件被改动了，是否重载同步？
         </p>
         <div className="flex justify-end gap-2">
           <button
@@ -273,14 +272,14 @@ export function IrExternalWatcher() {
             onClick={() => handleIgnore(dialog.mtime)}
             className="vp-button-secondary rounded-xl px-3 py-1.5 text-xs font-medium"
           >
-            Ignore
+            忽略
           </button>
           <button
             type="button"
             onClick={handleDiscardAndReload}
             className="vp-button-primary rounded-xl px-3 py-1.5 text-xs font-medium"
           >
-            Reload
+            重载
           </button>
         </div>
       </div>
