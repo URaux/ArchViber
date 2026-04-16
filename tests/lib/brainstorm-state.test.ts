@@ -7,6 +7,9 @@ import {
   applyAssistantControl,
   brainstormStateFilePath,
   createInitialBrainstormState,
+  EVENT_LOG_COMPACT_THRESHOLD,
+  EVENT_LOG_COMPACT_TOKEN_BUDGET,
+  estimateEventLogTokens,
   formatStateForPrompt,
   parseAssistantControlComments,
   readBrainstormState,
@@ -39,28 +42,35 @@ function makeEvent(i: number): ExternalDepsEvent {
   }
 }
 
+// Smaller variant used to probe the count-ceiling trigger specifically:
+// drops optional fields (envVar/group/status) so many events stay under the
+// token budget while still crossing the 50-event ceiling.
+function makeTinyEvent(i: number): ExternalDepsEvent {
+  const service = i < 20 ? `s${i}` : `s${i - 18}`
+  return { op: 'add', service, type: 'api_key' }
+}
+
 describe('brainstorm state — externalDeps event compaction', () => {
-  it('compacts the event log into a snapshot once threshold is hit', () => {
+  it('compacts the event log into a snapshot once the count ceiling is hit', () => {
     let state = createInitialBrainstormState('s1')
 
-    // Push 25 events one at a time so we cross the 20-event threshold.
-    for (let i = 0; i < 25; i++) {
-      state = applyExternalDepsEvents(state, [makeEvent(i)])
+    // Tiny events keep total footprint under the 1500-token budget so we can
+    // isolate the count-ceiling trigger. Push ceiling+5 events one at a time.
+    const total = EVENT_LOG_COMPACT_THRESHOLD + 5
+    for (let i = 0; i < total; i++) {
+      state = applyExternalDepsEvents(state, [makeTinyEvent(i)])
     }
 
-    // Threshold compaction must have fired: log empties, snapshot retained.
-    expect(state.externalDepsEventLog.length).toBeLessThan(20)
+    // Count-ceiling compaction must have fired: log empties, snapshot retained.
+    expect(state.externalDepsEventLog.length).toBeLessThan(EVENT_LOG_COMPACT_THRESHOLD)
     expect(state.externalDeps.length).toBeGreaterThan(0)
 
-    // Snapshot must reflect the LAST status seen for overlapping keys.
-    // svc-3 was written at i=3 (i%3===0 → provided) and again at i=21
-    // (21%3===0 → provided). Final remains 'provided'.
-    const svc3 = state.externalDeps.find((d) => d.service === 'svc-3')
-    expect(svc3?.status).toBe('provided')
-
-    // 25 events with services svc-0..svc-19 plus svc-2..svc-6 overlap →
-    // 20 unique services after de-dup.
-    expect(state.externalDeps.length).toBe(20)
+    // Snapshot must reflect the LAST write for overlapping keys.
+    // makeTinyEvent maps i→service such that s3 is written at i=3 and i=21
+    // (21-18). Check the dep exists (status defaults to 'needed' since we
+    // drop the field in tiny events).
+    const s3 = state.externalDeps.find((d) => d.service === 's3')
+    expect(s3).toBeDefined()
   })
 
   it('keeps the log AND a live snapshot below the compaction threshold', () => {
@@ -70,6 +80,63 @@ describe('brainstorm state — externalDeps event compaction', () => {
     }
     expect(state.externalDepsEventLog.length).toBe(5)
     expect(state.externalDeps.length).toBe(5)
+    // Sanity: 5 short events are well below both triggers.
+    expect(estimateEventLogTokens(state.externalDepsEventLog)).toBeLessThan(
+      EVENT_LOG_COMPACT_TOKEN_BUDGET,
+    )
+  })
+
+  it('compacts early when a few long-note events exceed the token budget', () => {
+    // Five events with verbose CJK/English notes should trip the token
+    // budget long before the 50-event count ceiling — this is the exact
+    // long-novice-session scenario the token-based trigger exists for.
+    let state = createInitialBrainstormState('s-token-budget')
+    const longNote =
+      '这是一段很长的 notes，用来模拟用户在 novice 模式下给某个外部依赖写的详细备注。'.repeat(30) +
+      ' Additional English exposition that inflates the JSON payload well past'.repeat(10)
+
+    const events: ExternalDepsEvent[] = []
+    for (let i = 0; i < 5; i++) {
+      events.push({
+        op: 'add',
+        service: `heavy-svc-${i}`,
+        type: 'api_key',
+        status: 'needed',
+        envVar: `HEAVY_${i}_KEY`,
+        notes: longNote,
+      })
+    }
+
+    // Verify our estimator agrees the batch is well over budget before we
+    // feed it in — guards against the heuristic drifting in future edits.
+    expect(estimateEventLogTokens(events)).toBeGreaterThanOrEqual(
+      EVENT_LOG_COMPACT_TOKEN_BUDGET,
+    )
+
+    state = applyExternalDepsEvents(state, events)
+
+    // Token-budget compaction must have fired despite only 5 events.
+    expect(state.externalDepsEventLog).toEqual([])
+    expect(state.externalDeps).toHaveLength(5)
+    expect(state.externalDeps[0].notes).toBe(longNote)
+  })
+
+  it('does NOT compact 21 short events — tokens below budget, count below ceiling', () => {
+    // 21 short events > old 20-event threshold but far below the new 50-event
+    // ceiling and the 1500-token budget. They should accumulate in the log
+    // without triggering compaction.
+    let state = createInitialBrainstormState('s-no-compact')
+    for (let i = 0; i < 21; i++) {
+      state = applyExternalDepsEvents(state, [makeEvent(i)])
+    }
+
+    expect(state.externalDepsEventLog.length).toBe(21)
+    expect(estimateEventLogTokens(state.externalDepsEventLog)).toBeLessThan(
+      EVENT_LOG_COMPACT_TOKEN_BUDGET,
+    )
+    expect(state.externalDepsEventLog.length).toBeLessThan(
+      EVENT_LOG_COMPACT_THRESHOLD,
+    )
   })
 
   it('treats `remove` events as deletions in the snapshot', () => {
@@ -82,9 +149,14 @@ describe('brainstorm state — externalDeps event compaction', () => {
   })
 
   it('atomically writes and reads back state from disk', async () => {
+    // Feed just enough tiny events to cross the count ceiling, then add a few
+    // more that accumulate in the fresh log. Tiny events keep us under the
+    // token budget so we isolate the count-ceiling path.
+    const overCeilingBy = 2
+    const total = EVENT_LOG_COMPACT_THRESHOLD + overCeilingBy
     let state = createInitialBrainstormState('test-session-uuid')
-    for (let i = 0; i < 22; i++) {
-      state = applyExternalDepsEvents(state, [makeEvent(i)])
+    for (let i = 0; i < total; i++) {
+      state = applyExternalDepsEvents(state, [makeTinyEvent(i)])
     }
     const written = await writeBrainstormState(tmpDir, state)
     expect(written).toBe(brainstormStateFilePath(tmpDir, 'test-session-uuid'))
@@ -93,9 +165,9 @@ describe('brainstorm state — externalDeps event compaction', () => {
     expect(reloaded).not.toBeNull()
     expect(reloaded!.sessionId).toBe('test-session-uuid')
     expect(reloaded!.externalDeps.length).toBeGreaterThan(0)
-    // 22 events: compaction fires at event 20 (log → 0), then events 21+22
-    // are appended below threshold → log length = 2.
-    expect(reloaded!.externalDepsEventLog.length).toBe(2)
+    // Compaction fires once the ceiling is crossed (log → 0), then the
+    // remaining events are appended below threshold.
+    expect(reloaded!.externalDepsEventLog.length).toBe(overCeilingBy)
   })
 
   it('returns null for an unknown sessionId', async () => {

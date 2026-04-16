@@ -14,13 +14,62 @@ import { z } from 'zod'
  *   - Injected back into subsequent prompts via `formatStateForPrompt` so the
  *     LLM has a stable memory anchor across long novice conversations.
  *
- * The eventLog grows up to 20 entries before being compacted into a fresh
- * snapshot of `externalDeps` (last-write-wins keyed by `service+type+envVar`).
+ * The eventLog is compacted into a fresh snapshot of `externalDeps`
+ * (last-write-wins keyed by `service+type+envVar`) whenever either:
+ *   (a) its estimated token footprint crosses `EVENT_LOG_COMPACT_TOKEN_BUDGET`
+ *       (primary signal — robust when events carry long notes or CJK text), or
+ *   (b) its entry count crosses `EVENT_LOG_COMPACT_THRESHOLD` (hard ceiling
+ *       fallback — guards against pathological many-tiny-events cases).
  */
 
 const BRAINSTORM_STATE_DIR = 'brainstorm-state'
 
-const EVENT_LOG_COMPACT_THRESHOLD = 20
+/**
+ * Token budget for the raw externalDeps event log before compaction.
+ *
+ * Chosen at 1500 tokens based on industry norms for working-memory windows:
+ *   - LangChain ConversationSummaryBufferMemory default `max_token_limit`=2000
+ *   - LangChain ConversationTokenBufferMemory default `max_token_limit`=2000
+ *   - LlamaIndex ChatMemoryBuffer default `token_limit`≈3000
+ *   - Anthropic guidance recommends keeping hot working-memory slices well
+ *     under the model ceiling so prompts stay cache-friendly.
+ *
+ * The event log is only ONE slice of the prompt (decisions, externalDeps
+ * snapshot, chat history, and system prompt all compete for the same window),
+ * so we scale the LangChain default down: 1500 ≈ 5–8% of a 32k working window
+ * while leaving ample headroom for CJK content where our char-based heuristic
+ * tends to under-count.
+ */
+export const EVENT_LOG_COMPACT_TOKEN_BUDGET = 1500
+
+/**
+ * Hard ceiling on the number of raw events retained before forced compaction,
+ * independent of token budget. Bumped from 20 → 50 now that the token-based
+ * trigger is the primary signal; the count ceiling only catches pathological
+ * many-tiny-events sessions that slip under the token budget.
+ *
+ * @deprecated Prefer `EVENT_LOG_COMPACT_TOKEN_BUDGET`. Kept exported for
+ *   backward compatibility with any external readers; internal compaction
+ *   uses both triggers (token budget OR count ceiling).
+ */
+export const EVENT_LOG_COMPACT_THRESHOLD = 50
+
+/**
+ * Cheap heuristic for the token footprint of an event log. Uses
+ * `JSON.stringify(events).length / 3.5`:
+ *   - chars/4 is the canonical English rule of thumb
+ *   - chars/2 is the CJK rule of thumb
+ *   - 3.5 splits the difference and absorbs JSON syntactic overhead (quotes,
+ *     braces, commas) which inflates char count relative to semantic tokens
+ *
+ * Keep pure — no tokenizer dependency (package.json has none) and no I/O.
+ * Accuracy within ~30% of tiktoken is sufficient for a compaction trigger;
+ * the count ceiling catches any extreme under-count cases.
+ */
+export function estimateEventLogTokens(events: ExternalDepsEvent[]): number {
+  if (events.length === 0) return 0
+  return Math.ceil(JSON.stringify(events).length / 3.5)
+}
 
 const externalDepStatusSchema = z.enum(['needed', 'provided', 'skipped', 'unknown'])
 
@@ -228,8 +277,10 @@ function reduceEventsToSnapshot(
 }
 
 /**
- * Append new externalDeps events to the log. When the log reaches the
- * compaction threshold, fold all events into `externalDeps` and clear the log.
+ * Append new externalDeps events to the log. When the log crosses either the
+ * token budget (`EVENT_LOG_COMPACT_TOKEN_BUDGET`) or the event-count ceiling
+ * (`EVENT_LOG_COMPACT_THRESHOLD`), fold all events into `externalDeps` and
+ * clear the log.
  *
  * Returns a new state object — does not mutate input.
  */
@@ -242,7 +293,15 @@ export function applyExternalDepsEvents(
   const stamped = newEvents.map((ev) => (ev.ts ? ev : { ...ev, ts: new Date().toISOString() }))
   const combinedLog = [...state.externalDepsEventLog, ...stamped]
 
-  if (combinedLog.length >= EVENT_LOG_COMPACT_THRESHOLD) {
+  // Primary trigger: estimated token footprint. Long novice sessions may emit
+  // events with verbose `notes` / CJK text that blow past a safe prompt budget
+  // well before the 50-event count ceiling. The count ceiling stays as a
+  // pathological-case fallback for many-tiny-events cases.
+  const shouldCompact =
+    estimateEventLogTokens(combinedLog) >= EVENT_LOG_COMPACT_TOKEN_BUDGET ||
+    combinedLog.length >= EVENT_LOG_COMPACT_THRESHOLD
+
+  if (shouldCompact) {
     const newSnapshot = reduceEventsToSnapshot(state.externalDeps, combinedLog)
     return {
       ...state,
@@ -442,6 +501,10 @@ function safeJsonParse<T = unknown>(raw: string): T | null {
 /**
  * Pull control comments out of the assistant's streamed text. Tolerates
  * malformed payloads (skips them) so a bad emission can't crash the chat.
+ *
+ * SECURITY: NEVER pass user-provided text here — only assistant-authored
+ * streamed output. A user turn that forges `<!-- externalDeps: [...] -->`
+ * would otherwise be able to write state on the user's own behalf.
  */
 export function parseAssistantControlComments(text: string): ParsedAssistantControl {
   const result: ParsedAssistantControl = { externalDepsEvents: [] }
