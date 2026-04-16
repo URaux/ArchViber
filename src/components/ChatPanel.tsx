@@ -302,8 +302,6 @@ export function ChatPanel() {
   const [thinkingMsg, setThinkingMsg] = useState('')
   // Carousel state: currentCardIndex per message index
   const [carouselIndices, setCarouselIndices] = useState<Record<number, number>>({})
-  const carouselScrollRefs = useRef<Record<number, HTMLDivElement | null>>({})
-  const carouselCardRefs = useRef<Record<string, HTMLDivElement | null>>({})
   /**
    * Staging area for batched multi-card form submissions.
    * Shape: { [messageIndex]: { [choiceIndex]: { selections, ordered } } }
@@ -1424,14 +1422,15 @@ export function ChatPanel() {
                           {(() => {
                             const renderChoice = (choice: typeof userChoices[number], ci: number) => {
                               const nextUserMsg = activeMessages.slice(messageIndex + 1).find(m => m.role === 'user')
-                              const selectedText = !isLastAssistant && nextUserMsg ? nextUserMsg.content : undefined
+                              const fallbackSelected = nextUserMsg && !isLastAssistant ? nextUserMsg.content : undefined
                               const persistedTrace = entry.choiceSelections?.[ci]
                               const isAnswered = !!persistedTrace
+                              const isMultiCardTurn = userChoices.length > 1
                               return (
                                 <OptionCards
                                   options={choice.options.map((opt, oi) => ({ number: String(oi + 1), text: opt }))}
                                   disabled={isSending || !isLastAssistant || isAnswered}
-                                  selectedText={selectedText}
+                                  selectedText={fallbackSelected ?? persistedTrace?.selections?.[0]}
                                   selectedTexts={persistedTrace?.selections}
                                   multi={choice.multi}
                                   ordered={choice.ordered ?? persistedTrace?.ordered}
@@ -1439,7 +1438,15 @@ export function ChatPanel() {
                                   max={choice.max}
                                   allowCustom={choice.allowCustom}
                                   allowIndifferent={choice.allowIndifferent}
-                                  onSelect={(text) => { void handleOptionSelect(text) }}
+                                  onSelect={(text) => {
+                                    if (isMultiCardTurn) {
+                                      // Route single-select clicks through the batch staging pipeline
+                                      // so they don't fire a solo /api/chat and drop other cards' pending answers.
+                                      void handleFormSubmission(messageIndex, ci, { selections: [text], ordered: false }, userChoices.length)
+                                    } else {
+                                      void handleOptionSelect(text)
+                                    }
+                                  }}
                                   onSubmitMulti={(payload) => { void handleFormSubmission(messageIndex, ci, payload, userChoices.length) }}
                                 />
                               )
@@ -1454,13 +1461,6 @@ export function ChatPanel() {
                             const gotoCard = (nextIdx: number) => {
                               const clamped = Math.max(0, Math.min(userChoices.length - 1, nextIdx))
                               setCarouselIndices(prev => ({ ...prev, [messageIndex]: clamped }))
-                              // Scroll the carousel container directly instead of using scrollIntoView,
-                              // which would also scroll the parent page viewport.
-                              const container = carouselScrollRefs.current[messageIndex]
-                              const cardEl = carouselCardRefs.current[`${messageIndex}-${clamped}`]
-                              if (container && cardEl) {
-                                container.scrollTo({ left: cardEl.offsetLeft, behavior: 'smooth' })
-                              }
                             }
                             return (
                               <div className="mt-3">
@@ -1493,19 +1493,17 @@ export function ChatPanel() {
                                     <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                                   </button>
                                 </div>
-                                {/* card scroll track */}
-                                <div
-                                  ref={(el) => { carouselScrollRefs.current[messageIndex] = el }}
-                                  className="flex items-start snap-x snap-mandatory overflow-x-hidden pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                                >
+                                {/* card stack — only the current card is visible; others kept mounted via `hidden` so their internal state persists across navigation */}
+                                <div className="pb-2">
                                   {userChoices.map((choice, ci) => {
                                     const persistedTrace = entry.choiceSelections?.[ci]
                                     const isAnswered = !!persistedTrace
+                                    const isActive = ci === currentCardIdx
                                     return (
                                       <div
                                         key={ci}
-                                        ref={(el) => { carouselCardRefs.current[`${messageIndex}-${ci}`] = el }}
-                                        className="w-full min-w-0 shrink-0 snap-center overflow-hidden"
+                                        hidden={!isActive}
+                                        className="w-full min-w-0 overflow-hidden"
                                       >
                                         {choice.question ? (
                                           <div className="mb-1 flex items-center gap-2 text-xs font-medium text-slate-600">
