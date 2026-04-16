@@ -1454,8 +1454,13 @@ export function ChatPanel() {
                             const gotoCard = (nextIdx: number) => {
                               const clamped = Math.max(0, Math.min(userChoices.length - 1, nextIdx))
                               setCarouselIndices(prev => ({ ...prev, [messageIndex]: clamped }))
+                              // Scroll the carousel container directly instead of using scrollIntoView,
+                              // which would also scroll the parent page viewport.
+                              const container = carouselScrollRefs.current[messageIndex]
                               const cardEl = carouselCardRefs.current[`${messageIndex}-${clamped}`]
-                              cardEl?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
+                              if (container && cardEl) {
+                                container.scrollTo({ left: cardEl.offsetLeft, behavior: 'smooth' })
+                              }
                             }
                             return (
                               <div className="mt-3">
@@ -1527,10 +1532,12 @@ export function ChatPanel() {
                         </>
                       ) : (
                         actionBlocks.length > 0 ? null : (
-                          <div className="flex items-center gap-2 text-slate-400">
-                            <span className="vp-spinner" />
-                            <span className="text-xs">{thinkingMsg || (locale === 'zh' ? 'AI 正在思考...' : 'AI is thinking...')}</span>
-                          </div>
+                          isSending && isLastAssistant ? (
+                            <div className="flex items-center gap-2 text-slate-400">
+                              <span className="vp-spinner" />
+                              <span className="text-xs">{thinkingMsg || (locale === 'zh' ? 'AI 正在思考...' : 'AI is thinking...')}</span>
+                            </div>
+                          ) : null
                         )
                       )}
                     </div>
