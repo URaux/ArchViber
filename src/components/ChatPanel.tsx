@@ -1496,7 +1496,7 @@ export function ChatPanel() {
                                 {/* card scroll track */}
                                 <div
                                   ref={(el) => { carouselScrollRefs.current[messageIndex] = el }}
-                                  className="flex snap-x snap-mandatory overflow-x-hidden pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                                  className="flex items-start snap-x snap-mandatory overflow-x-hidden pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                                 >
                                   {userChoices.map((choice, ci) => {
                                     const persistedTrace = entry.choiceSelections?.[ci]
