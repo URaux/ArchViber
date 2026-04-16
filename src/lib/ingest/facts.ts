@@ -10,6 +10,7 @@
  * no call edges (follow-up once tree-sitter emits call sites).
  */
 
+import * as fs from 'node:fs'
 import * as path from 'node:path'
 import type { ParsedModule as TsParsedModule, ParsedSymbol, SymbolKind } from './ast-ts'
 
@@ -91,6 +92,14 @@ export interface FactInputModule {
   language?: FactLanguage
 }
 
+/**
+ * tsconfig-style path alias map, e.g. `{ '@/*': ['./src/*'] }`.
+ * Keys and values use the `*` wildcard convention from `tsconfig.compilerOptions.paths`.
+ * Target paths are resolved against `projectRoot` (they may be relative like
+ * `./src/*` or plain `src/*`).
+ */
+export type PathAliasMap = Record<string, string[]>
+
 export interface BuildFactGraphInput {
   /** Absolute path to the project root. Used for computing relative paths. */
   projectRoot: string
@@ -102,6 +111,13 @@ export interface BuildFactGraphInput {
    * over `module.language` and over extension-based inference.
    */
   languageByPath?: Map<string, FactLanguage>
+  /**
+   * Optional path aliases — same shape as `tsconfig.compilerOptions.paths`.
+   * When a non-relative specifier matches an alias pattern, the resolver
+   * tries each target in order and falls back to the standard ext/index
+   * probe. Non-matching specifiers stay dropped per Phase 1 scope.
+   */
+  pathAliases?: PathAliasMap
 }
 
 /**
@@ -198,6 +214,84 @@ function isRelativeSpecifier(spec: string): boolean {
   )
 }
 
+interface CompiledAlias {
+  /** Prefix before `*` in the pattern, e.g. `@/` for `@/*`. Empty if no `*`. */
+  prefix: string
+  /** Suffix after `*`, e.g. `''` for `@/*`; rare in practice. */
+  suffix: string
+  /** True when the pattern had no `*` — exact match only. */
+  exact: boolean
+  /** Targets, with `*` → `(.*)` capture position marked. */
+  targets: Array<{ prefix: string; suffix: string; exact: boolean }>
+}
+
+/** Compile a tsconfig-style alias map once so resolution per import stays cheap. */
+function compileAliases(raw: PathAliasMap | undefined): CompiledAlias[] {
+  if (!raw) return []
+  const out: CompiledAlias[] = []
+  for (const [pattern, targets] of Object.entries(raw)) {
+    const star = pattern.indexOf('*')
+    const exact = star < 0
+    out.push({
+      prefix: exact ? pattern : pattern.slice(0, star),
+      suffix: exact ? '' : pattern.slice(star + 1),
+      exact,
+      targets: targets.map((t) => {
+        const ts = t.indexOf('*')
+        const texact = ts < 0
+        return {
+          prefix: texact ? t : t.slice(0, ts),
+          suffix: texact ? '' : t.slice(ts + 1),
+          exact: texact,
+        }
+      }),
+    })
+  }
+  // Longest-prefix-first so `@/foo/*` beats `@/*`.
+  out.sort((a, b) => b.prefix.length - a.prefix.length)
+  return out
+}
+
+/**
+ * Try resolving an alias-style specifier (e.g. `@/lib/store`) against the set
+ * of known modules. Returns the matched project-relative path or null.
+ */
+function resolveAliasSpecifier(
+  specifier: string,
+  aliases: CompiledAlias[],
+  moduleRelPaths: Set<string>,
+): string | null {
+  for (const alias of aliases) {
+    let captured: string | null = null
+    if (alias.exact) {
+      if (specifier === alias.prefix) captured = ''
+    } else if (
+      specifier.startsWith(alias.prefix) &&
+      specifier.endsWith(alias.suffix) &&
+      specifier.length >= alias.prefix.length + alias.suffix.length
+    ) {
+      captured = specifier.slice(alias.prefix.length, specifier.length - alias.suffix.length)
+    }
+    if (captured === null) continue
+    for (const target of alias.targets) {
+      const expanded = target.exact ? target.prefix : `${target.prefix}${captured}${target.suffix}`
+      // Normalize leading `./` and backslashes; targets are relative to projectRoot.
+      const cleaned = toPosixPath(expanded.replace(/^\.\//, ''))
+      if (cleaned.startsWith('..')) continue
+      if (moduleRelPaths.has(cleaned)) return cleaned
+      for (const ext of RESOLVE_EXTENSIONS) {
+        const candidate = `${cleaned}${ext}`
+        if (moduleRelPaths.has(candidate)) return candidate
+      }
+      for (const indexFile of INDEX_CANDIDATES) {
+        const candidate = path.posix.join(cleaned, indexFile)
+        if (moduleRelPaths.has(candidate)) return candidate
+      }
+    }
+  }
+  return null
+}
+
 /**
  * Resolve a relative import specifier to the project-relative path of an
  * existing module node, or `null` if nothing matches.
@@ -261,8 +355,9 @@ function importEdgeKey(k: ImportEdgeKey): string {
  * import edges sharing (source, target, specifier) — names are unioned.
  */
 export function buildFactGraph(input: BuildFactGraphInput): FactGraph {
-  const { projectRoot, modules, languageByPath } = input
+  const { projectRoot, modules, languageByPath, pathAliases } = input
   const absRoot = projectRoot
+  const compiledAliases = compileAliases(pathAliases)
 
   const nodes = new Map<FactNodeId, FactNode>()
   const containsEdges: FactEdge[] = []
@@ -342,11 +437,14 @@ export function buildFactGraph(input: BuildFactGraphInput): FactGraph {
       const specifier = imp.from
       if (!specifier) continue
 
-      // Drop non-relative (package / stdlib) imports — Phase 1 scope. The
+      let targetRel: string | null = null
+      if (isRelativeSpecifier(specifier)) {
+        targetRel = resolveRelativeSpecifier(mod.relPath, specifier, moduleRelPaths)
+      } else if (compiledAliases.length > 0) {
+        targetRel = resolveAliasSpecifier(specifier, compiledAliases, moduleRelPaths)
+      }
+      // Package / stdlib imports that match no alias stay dropped — the
       // package graph is a Phase 2 concern.
-      if (!isRelativeSpecifier(specifier)) continue
-
-      const targetRel = resolveRelativeSpecifier(mod.relPath, specifier, moduleRelPaths)
       if (!targetRel) continue
 
       const targetId = moduleId(targetRel)
@@ -410,6 +508,60 @@ export function isModuleNode(n: FactNode): n is FactModuleNode {
 
 export function isSymbolNode(n: FactNode): n is FactSymbolNode {
   return n.kind === 'symbol'
+}
+
+// ---------------------------------------------------------------------------
+// tsconfig.json helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Read `compilerOptions.paths` from `<projectRoot>/tsconfig.json` and return
+ * it as a `PathAliasMap`. Returns `null` when the file is missing or has no
+ * paths entry. Tolerant of JSON with trailing commas and line comments — uses
+ * a cheap pre-processor rather than pulling in a JSONC dependency.
+ *
+ * This is intentionally synchronous: callers typically already read the file
+ * once at ingest start-up, and the tsconfig is ≤ a few KB.
+ */
+export function loadTsconfigPathAliases(projectRoot: string): PathAliasMap | null {
+  const tsconfigPath = path.join(projectRoot, 'tsconfig.json')
+  let raw: string
+  try {
+    raw = fs.readFileSync(tsconfigPath, 'utf8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+    throw error
+  }
+  // Attempt strict parse first — most tsconfig.json files are valid JSON. Fall
+  // back to a light JSONC-tolerant pass that strips only // line comments and
+  // trailing commas. We deliberately do NOT strip /* */ block comments because
+  // tsconfig path patterns contain `/*` sequences (e.g. `"@/*"`, `"**/*.ts"`)
+  // that a naive block-comment stripper mangles.
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    const stripped = raw
+      .replace(/\/\/[^\n]*/g, '')
+      .replace(/,(\s*[}\]])/g, '$1')
+    try {
+      parsed = JSON.parse(stripped)
+    } catch {
+      return null
+    }
+  }
+  if (!parsed || typeof parsed !== 'object') return null
+  const co = (parsed as { compilerOptions?: unknown }).compilerOptions
+  if (!co || typeof co !== 'object') return null
+  const paths = (co as { paths?: unknown }).paths
+  if (!paths || typeof paths !== 'object') return null
+  const out: PathAliasMap = {}
+  for (const [pattern, targets] of Object.entries(paths as Record<string, unknown>)) {
+    if (!Array.isArray(targets)) continue
+    const filtered = targets.filter((t): t is string => typeof t === 'string')
+    if (filtered.length > 0) out[pattern] = filtered
+  }
+  return Object.keys(out).length > 0 ? out : null
 }
 
 // TODO(W2.D3): emit `call` edges once tree-sitter extractors yield call sites.

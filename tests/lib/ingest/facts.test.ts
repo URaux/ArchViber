@@ -325,6 +325,90 @@ describe('buildFactGraph', () => {
     })
     expect(graph.stats.byLanguage).toEqual({ python: 1 })
   })
+
+  it('resolves @/* path aliases against projectRoot', () => {
+    const graph = buildFactGraph({
+      projectRoot: ROOT,
+      pathAliases: { '@/*': ['./src/*'] },
+      modules: [
+        {
+          file: abs('src/a.ts'),
+          imports: [{ from: '@/lib/store', names: ['useAppStore'] }],
+          exports: [],
+          symbols: [],
+        },
+        { file: abs('src/lib/store.ts'), imports: [], exports: [], symbols: [] },
+      ],
+    })
+    const importEdges = graph.edges.filter((e) => e.kind === 'import')
+    expect(importEdges).toHaveLength(1)
+    expect(importEdges[0]!.target).toBe('module:src/lib/store.ts')
+    expect(importEdges[0]!.names).toEqual(['useAppStore'])
+  })
+
+  it('falls back through extensions + /index for aliased specifiers', () => {
+    const graph = buildFactGraph({
+      projectRoot: ROOT,
+      pathAliases: { '@/*': ['./src/*'] },
+      modules: [
+        {
+          file: abs('src/a.ts'),
+          imports: [
+            { from: '@/dir', names: ['Dir'] },
+            { from: '@/widget', names: ['Widget'] },
+          ],
+          exports: [],
+          symbols: [],
+        },
+        { file: abs('src/dir/index.tsx'), imports: [], exports: [], symbols: [] },
+        { file: abs('src/widget.tsx'), imports: [], exports: [], symbols: [] },
+      ],
+    })
+    const targets = graph.edges.filter((e) => e.kind === 'import').map((e) => e.target).sort()
+    expect(targets).toEqual(['module:src/dir/index.tsx', 'module:src/widget.tsx'])
+  })
+
+  it('drops alias-looking specifiers that do not match any pattern', () => {
+    const graph = buildFactGraph({
+      projectRoot: ROOT,
+      pathAliases: { '@/*': ['./src/*'] },
+      modules: [
+        {
+          file: abs('src/a.ts'),
+          imports: [
+            { from: '~/not-an-alias', names: ['X'] },
+            { from: 'react', names: ['useEffect'] },
+          ],
+          exports: [],
+          symbols: [],
+        },
+      ],
+    })
+    expect(graph.edges.filter((e) => e.kind === 'import')).toEqual([])
+  })
+
+  it('prefers the longest-prefix alias when patterns overlap', () => {
+    const graph = buildFactGraph({
+      projectRoot: ROOT,
+      pathAliases: {
+        '@/*': ['./generic/*'],
+        '@/ui/*': ['./ui/*'],
+      },
+      modules: [
+        {
+          file: abs('src/a.ts'),
+          imports: [{ from: '@/ui/button', names: ['Button'] }],
+          exports: [],
+          symbols: [],
+        },
+        { file: abs('generic/ui/button.ts'), imports: [], exports: [], symbols: [] },
+        { file: abs('ui/button.ts'), imports: [], exports: [], symbols: [] },
+      ],
+    })
+    const importEdges = graph.edges.filter((e) => e.kind === 'import')
+    expect(importEdges).toHaveLength(1)
+    expect(importEdges[0]!.target).toBe('module:ui/button.ts')
+  })
 })
 
 // ---------------------------------------------------------------------------

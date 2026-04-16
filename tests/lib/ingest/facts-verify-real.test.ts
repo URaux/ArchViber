@@ -11,7 +11,7 @@ import { performance } from 'node:perf_hooks'
 import { describe, it, expect } from 'vitest'
 
 import { parseTsProject } from '../../../src/lib/ingest/ast-ts'
-import { buildFactGraph } from '../../../src/lib/ingest/facts'
+import { buildFactGraph, loadTsconfigPathAliases } from '../../../src/lib/ingest/facts'
 import {
   defaultFactsCachePath,
   isCacheValid,
@@ -35,7 +35,8 @@ describe('facts — verification on archviber/src', () => {
       }
     }
 
-    const graph = buildFactGraph({ projectRoot: archviberRoot, modules: parsed.modules })
+    const pathAliases = loadTsconfigPathAliases(archviberRoot) ?? undefined
+    const graph = buildFactGraph({ projectRoot: archviberRoot, modules: parsed.modules, pathAliases })
 
     // eslint-disable-next-line no-console
     console.log('[facts-verify] parsed modules:', parsed.modules.length)
@@ -53,13 +54,8 @@ describe('facts — verification on archviber/src', () => {
     // Sanity thresholds.
     expect(graph.stats.modules).toBeGreaterThanOrEqual(98)
     expect(graph.stats.symbols).toBeGreaterThan(200)
-    // `imports` threshold is the number of RESOLVED relative-import edges.
-    // ArchViber uses the `@/` path alias heavily (which the resolver drops
-    // today — only `./` and `../` resolve); actual relative imports are ~56.
-    // The primary quality signal is the resolved-ratio assertion below.
-    expect(graph.stats.imports).toBeGreaterThan(20)
-    // At least half the relative imports should have resolved to edges.
-    expect(graph.stats.imports / Math.max(1, relativeImportsCount)).toBeGreaterThan(0.5)
+    // With @/* alias resolution on, hundreds of import edges should land.
+    expect(graph.stats.imports).toBeGreaterThan(200)
 
     // Cache round-trip + hot-hit timing.
     const mtimes: Record<string, number> = {}
