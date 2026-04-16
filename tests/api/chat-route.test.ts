@@ -90,7 +90,7 @@ describe('POST /api/chat', () => {
     expect(agentRunnerMock.spawnAgent).toHaveBeenCalledTimes(1)
     expect(agentRunnerMock.spawnAgent).toHaveBeenCalledWith(
       'chat',
-      expect.stringContaining('Respond in Markdown only. Do NOT generate any ```json:canvas-action blocks.'),
+      expect.stringContaining('Brainstorm Phase (v2 Protocol)'),
       'codex',
       process.cwd(),
       'codex-mini',
@@ -150,7 +150,7 @@ describe('POST /api/chat', () => {
     expect(response.headers.get('Content-Type')).toBe('text/event-stream')
     expect(streamChatMock).toHaveBeenCalledTimes(1)
     expect(streamChatMock).toHaveBeenCalledWith(
-      expect.stringContaining('Respond in Markdown only. Do NOT generate any ```json:canvas-action blocks.'),
+      expect.stringContaining('Brainstorm Phase (v2 Protocol)'),
       [{ role: 'user', content: 'Tell me about the architecture' }],
       {
         apiBase: 'https://direct.example.com',

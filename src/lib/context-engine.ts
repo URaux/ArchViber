@@ -657,81 +657,288 @@ function layerOutputFormat(agentType: AgentType, task: TaskType, locale: Locale,
     return '# Output Format\n\nWrite files directly to the filesystem. Do not output file contents to stdout unless asked.'
   }
 
-  // canvas agent in brainstorm phase: structured dimensions + convergence
+  // canvas agent in brainstorm phase: batched WHAT/HOW/DEPS protocol (v2).
+  // See .planning/phase1/BRAINSTORM-SKILL-V2-DRAFT.md for the source spec.
+  //
+  // Core migration vs v1:
+  //   - 3 batches (WHAT / HOW / DEPS) + 1 convergence round = 4 rounds max
+  //   - Option cards are ```json:user-choice fenced blocks (NOT numbered md)
+  //   - Control comments: <!-- progress: batch=X/3 round=N/4 mode=M -->
+  //     <!-- decisions: {...} --> and <!-- externalDeps: [...] -->
+  //   - Server-side state module re-injects prior decisions via a system
+  //     prefix (formatStateForPrompt), so the LLM sees what's already decided
+  //     without having to be reminded inside this prompt.
   if (sessionPhase === 'brainstorm') {
-    // Round number passed from server (counted from structured history array)
     const currentRound = brainstormRound ?? 1
-    const maxRounds = 8
+    const MAX_ROUNDS = 4
+    const isConverging = currentRound >= MAX_ROUNDS
+    const zh = locale === 'zh'
 
-    const dimensionsZh = [
-      '1. 项目类型和核心目标 — 这个系统要解决什么问题？',
-      '2. 目标用户和规模 — 谁在用？预期多大量级？',
-      '3. 核心功能模块 — 最重要的 3-5 个功能是什么？',
-      '4. 技术栈偏好 — 有没有必须用或不能用的技术？',
-      '5. 数据模型/关键实体 — 核心数据长什么样？主要的表/实体有哪些？',
-      '6. 集成和约束条件 — 要对接哪些外部系统？有什么硬性限制？',
+    // Round-specific pressure text. Three regimes:
+    //   round 1      → WHAT batch (always)
+    //   round 2      → HOW batch (derive from batch 1)
+    //   round 3      → DEPS batch (only if batch 2 surfaced external deps)
+    //   round 4+     → convergence, NO option cards
+    const roundGuidanceZh = isConverging
+      ? `当前是第 ${currentRound} 轮（收敛轮）。禁止再发 \`\`\`json:user-choice 卡片。严格按 "收敛格式" 段落的要求回复。`
+      : currentRound === 1
+        ? `当前是第 1 轮。发 Batch 1 · WHAT 层：3 张独立的选项卡（目标、用户与规模、核心功能 3-5 个多选）+ 首轮末尾的模式开关卡。`
+        : currentRound === 2
+          ? `当前是第 2 轮。发 Batch 2 · HOW 层：基于第 1 轮答案选出的领域，发 3-4 张领域相关的选项卡。不要发与领域无关的卡。`
+          : `当前是第 3 轮。发 Batch 3 · DEPS 层：只问 Batch 2 暴露的外部依赖需要澄清的部分（0-4 张卡）。没有就直接收敛。`
+
+    const roundGuidanceEn = isConverging
+      ? `This is round ${currentRound} (convergence). Do NOT emit any \`\`\`json:user-choice cards. Reply strictly per the "Convergence Format" section.`
+      : currentRound === 1
+        ? `This is round 1. Emit Batch 1 · WHAT: three independent cards (goal, users & scale, core features multi-select 3-5) + a mode-switch card at the end.`
+        : currentRound === 2
+          ? `This is round 2. Emit Batch 2 · HOW: 3-4 cards whose content is derived from the batch-1 answers. Do not emit cards unrelated to the user's domain.`
+          : `This is round 3. Emit Batch 3 · DEPS: 0-4 cards clarifying the external dependencies surfaced by batch 2. If none are needed, skip straight to convergence.`
+
+    const bodyZh = [
+      '# 需求讨论阶段（v2 协议）',
+      '',
+      '## 协议总览',
+      '',
+      '按 3 个批次推进需求讨论，最多 4 轮：WHAT（目标/用户/功能）→ HOW（领域具体方案）→ DEPS（外部依赖澄清）→ 收敛。同批的选项卡互相独立，同一轮一次性全部发出。每轮回复 = 0 到 N 张 `json:user-choice` 选项卡 + 必须的尾部控制注释。',
+      '',
+      '## 本轮指令',
+      '',
+      roundGuidanceZh,
+      '',
+      '## 批次结构',
+      '',
+      '**Batch 1 · WHAT 层（第 1 轮，恒发）**',
+      '- 卡 1：系统目标（单选）',
+      '- 卡 2：目标用户与规模（单选）',
+      '- 卡 3：核心功能（多选 3-5 个，`multi:true, min:3, max:5`）',
+      '- 附加：首轮末尾发模式开关卡（见「新手/老手模式」）',
+      '',
+      '**Batch 2 · HOW 层（第 2 轮，领域相关）**',
+      '卡片内容必须由 Batch 1 的领域答案推导，示例：',
+      '- 电商 → 支付 / 库存 / 物流 / 营销',
+      '- 个人知识库 → LLM / Embedding / 向量库 / 数据源',
+      '- SaaS → 多租户 / 计费 / SSO / 审计',
+      '- 通用兜底 → 技术栈 / 数据模型 / 集成',
+      '',
+      '**Batch 3 · DEPS 层（第 3 轮，按需）**',
+      '只问 Batch 2 暴露出来的外部依赖澄清（key / 域名 / OAuth 应用 / 采购审批）。没有就直接进入收敛轮。',
+      '',
+      '## 选项卡格式（`json:user-choice`）',
+      '',
+      '每张卡一个 \\`\\`\\`json:user-choice 代码块。**严格按以下字段**（前端只解析这些 key）：',
+      '',
+      '```',
+      '```json:user-choice',
+      '{',
+      '  "question": "要解决什么问题？",',
+      '  "options": ["个人效率工具", "团队协作 SaaS", "电商平台", "内容社区", "不懂，请解释"]',
+      '}',
+      '```',
+      '```',
+      '',
+      '可选字段（按需使用）：',
+      '- `"multi": true` — 多选（checkbox + 提交按钮）',
+      '- `"ordered": true` — 多选但带排序徽章（①②③），隐含 `multi:true`',
+      '- `"min": N` — 建议最少选几个（soft hint）',
+      '- `"max": N` — 硬上限，超过会禁用',
+      '- `"allowCustom": true` — 允许用户填自定义文本',
+      '- `"allowIndifferent": true` — 底部追加「无所谓」选项，与其他互斥',
+      '',
+      '**禁止**：在 `options` 里再嵌问题；用编号 markdown 列表代替卡片；把 `question` 写在选项外。每张卡至少保留 1 个「不懂，请解释」或 `allowIndifferent:true` 兜底项。',
+      '',
+      '## 控制注释（必须附在回复尾部）',
+      '',
+      '**每轮都发 `progress`：**',
+      '`<!-- progress: batch=N/3 round=N/4 mode=novice|expert -->`',
+      '（`batch` 用数字 1/2/3，收敛轮写 `batch=3/3`；`mode` 反映当前模式）',
+      '',
+      '**首轮额外发 `title`：**',
+      '`<!-- title: 项目标题 -->`（≤ 15 字）',
+      '',
+      '**`decisions` — 只在本轮产生新决策时发，遵守合并语义（硬约束，违反会丢数据）：**',
+      '- `features`（数组）：每轮必须重发 **完整最终集合**，客户端做 last-write-wins 整组覆盖。发部分列表 = 丢数据。',
+      '- 其他数组字段（如未来的 `integrations`、`data_sources`）同理：**整组重发**。',
+      '- `domain` / `scale`（字符串）：正常覆写即可。',
+      '- `tech_preferences`（对象 / RECORD）：按 key 浅合并 —— 本轮只需带要改的 key，未出现的 key 保留上一轮值。想清除某 key 就显式发 `{"该key": null}`。',
+      '- 单个 key 的 value 若是数组（如 `tech_preferences.databases: [...]`），内部整组覆写。',
+      '',
+      '格式示例：',
+      '`<!-- decisions: {"domain":"ecommerce","scale":"10k MAU","features":["浏览商品","购物车","下单支付"],"tech_preferences":{"frontend":"Next.js"}} -->`',
+      '',
+      '**`externalDeps` — 外部依赖事件流（累积追加，不覆盖）：**',
+      '每次收到用户答复内省一次"这一步是否引入了外部服务 / 凭证 / 账号需求？"。是 → 在本轮回复尾追加一条事件数组。前端解析用 `service+type+envVar` 去重。',
+      '',
+      '依赖三类：',
+      '- **A · data-input** — API key / 配置值 / OAuth secret（`type:"api_key"`，用户填进 `.env`）',
+      '- **B · human-action** — OAuth 应用注册 / 账号开通 / 域名 DNS（`type:"oauth_app"` 等，需去某处操作）',
+      '- **C · approval** — 法务 / 合规 / 采购（`type:"compliance"`，不阻塞构建，提示即可）',
+      '',
+      '事件字段：`op`（`add` | `update` | `remove`）、`service`、`type`、`status`（`needed` | `provided` | `skipped`）、可选 `group`、`envVar`、`action`、`docsUrl`、`notes`。示例：',
+      '`<!-- externalDeps: [{"op":"add","service":"stripe","type":"api_key","status":"needed","group":"A","envVar":"STRIPE_SECRET_KEY","docsUrl":"https://stripe.com/docs/keys"}] -->`',
+      '用户填了 key 后下一轮发 `{"op":"update","service":"stripe","type":"api_key","status":"provided"}`。',
+      '',
+      '## 新手 / 老手模式',
+      '',
+      '**默认 NOVICE。** NOVICE 下每个选项 = 短名 + 一句 ≤ 40 字的白话解释。例：',
+      '`Stripe — 美国支付公司，国际卡好但国内主体要求高，月费 0、每笔 2.9%`',
+      '',
+      '**首轮末尾恒发模式开关卡**：',
+      '```',
+      '```json:user-choice',
+      '{"question":"回答风格","options":["新手模式：每个选项都解释（默认）","老手模式：只列短名"]}',
+      '```',
+      '```',
+      '用户选了之后整个会话粘住，`mode` 写进 progress 注释。',
+      '',
+      '**首条用户消息 TONE 校准（仅用于猜首轮默认）**：',
+      '- EXPERT 线索：主动出现具体技术名（Postgres / Qdrant / OAuth2）、缩写、企业黑话',
+      '- NOVICE 线索：白话描述目标、零技术词、问句',
+      '最终以用户点开关为准。',
+      '',
+      '## 收敛格式（第 4 轮专用，必须严格遵守）',
+      '',
+      '- 回复全文 ≤ 150 字，禁止发 `json:user-choice` 卡。',
+      '- 首行写一句确认（如"信息已足够，下面是本次收敛方案"）。',
+      '- 3-5 个 bullet，每条 ≤ 10 字给架构要点（例："前端 Next.js"、"数据层 Postgres + Qdrant"、"支付 Stripe"）。',
+      '- 如有 externalDeps，追加一行 A/B/C 摘要，如"依赖：A 类 2 项（Stripe、OpenAI key）/ B 类 1 项（GitHub OAuth）"。',
+      '- 末尾一句请用户点击**「确认方案」**按钮。',
+      '- 禁止给代码、schema 细节、分层说明 —— 那些留到设计阶段。',
+      '- 仍必须附 `<!-- progress: batch=3/3 round=4/4 mode=... -->`；若本轮无新决策就不发 `decisions`，有就继续按规则发。',
+      '',
+      '## 边界',
+      '',
+      '- brainstorm 阶段禁止写代码、贴 schema、画分层架构。',
+      '- 同批的卡互相独立；有依赖关系就拆到下一批。',
+      '- 禁止输出 `json:canvas-action` 块（那是设计阶段的输出）。',
+      '- 如果系统消息里注入了 `## 本次 brainstorm 已知状态`，里面的 `已决策` / `外部依赖` 字段代表前面轮次已经定过的内容。**不要重新发卡问已定过的东西**；继续推进下一批，并在 `decisions` 控制注释里维持数组字段的完整最终集合。',
     ].join('\n')
 
-    const dimensionsEn = [
-      '1. Project type & core goal — What problem does this system solve?',
-      '2. Target users & scale — Who uses it? Expected scale?',
-      '3. Core features / modules — Top 3-5 features?',
-      '4. Tech stack preferences — Any must-use or must-avoid technologies?',
-      '5. Data model / key entities — What does the core data look like?',
-      '6. Integrations & constraints — External systems? Hard limitations?',
+    const bodyEn = [
+      '# Brainstorm Phase (v2 Protocol)',
+      '',
+      '## Overview',
+      '',
+      'Drive requirement discovery through 3 batches across up to 4 rounds: WHAT (goal / users / features) → HOW (domain-specific choices) → DEPS (external-dependency clarification) → Convergence. Cards within the same batch are independent and ALL emitted in one turn. Each reply = 0..N `json:user-choice` cards + mandatory trailing control comments.',
+      '',
+      '## This Round',
+      '',
+      roundGuidanceEn,
+      '',
+      '## Batch Structure',
+      '',
+      '**Batch 1 · WHAT (round 1, always emit)**',
+      '- Card 1: System goal (single choice)',
+      '- Card 2: Target users & scale (single choice)',
+      '- Card 3: Core features (multi-select 3-5, `multi:true, min:3, max:5`)',
+      '- Plus: mode-switch card at the end of the turn (see Novice/Expert below)',
+      '',
+      '**Batch 2 · HOW (round 2, domain-specific)**',
+      'Card content MUST be derived from batch-1 answers:',
+      '- e-commerce → payments / inventory / fulfillment / marketing',
+      '- personal knowledge base → LLM / embeddings / vector store / data sources',
+      '- SaaS → multi-tenancy / billing / SSO / audit',
+      '- fallback → tech stack / data model / integrations',
+      '',
+      '**Batch 3 · DEPS (round 3, only if needed)**',
+      'Only ask about external dependencies that batch 2 surfaced (keys, domains, OAuth apps, procurement). If none, skip to convergence.',
+      '',
+      '## Option-Card Format (`json:user-choice`)',
+      '',
+      'Each card is one \\`\\`\\`json:user-choice fenced block. **Use EXACTLY these field names** (the client parser ignores unknown keys):',
+      '',
+      '```',
+      '```json:user-choice',
+      '{',
+      '  "question": "What problem should the system solve?",',
+      '  "options": ["Personal productivity", "Team collaboration SaaS", "E-commerce", "Content community", "Not sure — explain, please"]',
+      '}',
+      '```',
+      '```',
+      '',
+      'Optional fields (use as needed):',
+      '- `"multi": true` — multi-select (checkbox + submit button)',
+      '- `"ordered": true` — multi-select with rank badges (①②③); implies `multi:true`',
+      '- `"min": N` — soft hint for minimum picks',
+      '- `"max": N` — hard cap; further picks disabled',
+      '- `"allowCustom": true` — free-text input option',
+      '- `"allowIndifferent": true` — append an "it doesn\'t matter" option, mutually exclusive',
+      '',
+      '**Forbidden**: nesting questions inside `options`; replacing cards with numbered markdown lists; leaving `question` outside the JSON. Every card must include at least one safety-net option — either an explicit "not sure — explain" entry, or `"allowIndifferent": true`.',
+      '',
+      '## Control Comments (appended to every reply)',
+      '',
+      '**Every turn emits `progress`:**',
+      '`<!-- progress: batch=N/3 round=N/4 mode=novice|expert -->`',
+      '(Use numeric `batch` 1/2/3. Convergence round still writes `batch=3/3`. `mode` reflects the current mode.)',
+      '',
+      '**First turn also emits `title`:**',
+      '`<!-- title: Project Title -->` (≤ 15 chars)',
+      '',
+      '**`decisions` — only when new decisions occur this turn; follow the merge contract (hard rule — violations silently wipe user data):**',
+      '- `features` (array): re-emit the **FULL final set** every turn. Client does last-write-wins replacement. Partial lists = data loss.',
+      '- Any other array field (future: `integrations`, `data_sources`, etc.) is treated identically: **re-emit full set**.',
+      '- `domain` / `scale` (strings): plain last-write-wins.',
+      '- `tech_preferences` (object / RECORD): shallow per-key merge. Only include keys you are changing this turn; absent keys keep prior values. To explicitly clear a key, emit `{"thatKey": null}`.',
+      '- If a `tech_preferences.someKey` value is itself an array (e.g. `databases: [...]`), that inner value IS replaced wholesale — re-emit the full inner array.',
+      '',
+      'Example: `<!-- decisions: {"domain":"ecommerce","scale":"10k MAU","features":["Browse","Cart","Checkout"],"tech_preferences":{"frontend":"Next.js"}} -->`',
+      '',
+      '**`externalDeps` — append-only event stream (NOT overwrite):**',
+      'After each user reply, self-check "did this introduce a new external service / credential / account requirement?" If yes, append an events array this turn. The client dedupes by `service+type+envVar`.',
+      '',
+      'Three groups:',
+      '- **A · data-input** — API keys, config values, OAuth secrets (`type:"api_key"`; user writes them into `.env`)',
+      '- **B · human-action** — OAuth app registration, account signup, domain DNS (`type:"oauth_app"` etc.; user must go somewhere and act)',
+      '- **C · approval** — legal / compliance / procurement (`type:"compliance"`; advisory only, does not block build)',
+      '',
+      'Event fields: `op` (`add` | `update` | `remove`), `service`, `type`, `status` (`needed` | `provided` | `skipped`), optional `group`, `envVar`, `action`, `docsUrl`, `notes`. Example:',
+      '`<!-- externalDeps: [{"op":"add","service":"stripe","type":"api_key","status":"needed","group":"A","envVar":"STRIPE_SECRET_KEY","docsUrl":"https://stripe.com/docs/keys"}] -->`',
+      'When the user later provides a key, emit `{"op":"update","service":"stripe","type":"api_key","status":"provided"}` next turn.',
+      '',
+      '## Novice / Expert Mode',
+      '',
+      '**Default: NOVICE.** In NOVICE, each option = short name + one plain-language sentence ≤ 40 chars. Example:',
+      '`Stripe — US payments; great for international cards, strict entity requirements for mainland China, 0 monthly + 2.9% per txn`',
+      '',
+      '**Always emit a mode-switch card at the end of round 1:**',
+      '```',
+      '```json:user-choice',
+      '{"question":"Answer style","options":["Novice mode: explain every option (default)","Expert mode: short names only"]}',
+      '```',
+      '```',
+      'Once the user picks, the choice sticks for the whole session and is reflected in `mode=` inside progress.',
+      '',
+      '**TONE calibration from the user\'s first message (used only to seed the round-1 default):**',
+      '- EXPERT signals: spontaneous technical names (Postgres / Qdrant / OAuth2), acronyms, enterprise jargon',
+      '- NOVICE signals: plain-language goals, no tech terms, question marks',
+      'The user\'s mode-switch click is the final authority.',
+      '',
+      '## Convergence Format (round 4 only — strict)',
+      '',
+      '- ≤ 150 words total. Do NOT emit any `json:user-choice` cards.',
+      '- Line 1: a single confirmation sentence (e.g. "Enough info — here is the converged plan").',
+      '- 3-5 bullets, each ≤ 10 words, capturing architecture highlights (e.g. "Frontend: Next.js", "Data: Postgres + Qdrant", "Payments: Stripe").',
+      '- If `externalDeps` exist, add one summary line: "Deps: A×2 (Stripe, OpenAI key) / B×1 (GitHub OAuth)".',
+      '- Closing sentence asks the user to click **"Start Designing"**.',
+      '- No code, no schema details, no layered explanations — those belong to the design phase.',
+      '- Still must emit `<!-- progress: batch=3/3 round=4/4 mode=... -->`. Skip `decisions` if nothing new; emit per-rules if something did change.',
+      '',
+      '## Boundaries',
+      '',
+      '- Brainstorm phase: no code, no schema, no layered architecture. Those belong to the design phase.',
+      '- Cards in the same batch must be independent; if one depends on another, split across batches.',
+      '- Do NOT emit `json:canvas-action` blocks — those are design-phase output only.',
+      '- If the system message already contains a section titled `## 本次 brainstorm 已知状态` (prior-state digest), its `已决策` / `外部依赖` fields are the authoritative record of earlier rounds. **Do NOT re-ask already-decided things**; move on to the next batch, and keep array fields in `decisions` re-emitted in full.',
     ].join('\n')
-
-    const convergenceZh = currentRound <= 6
-      ? `当前是第 ${currentRound} 轮（共最多 ${maxRounds} 轮）。按维度顺序推进，每次只问 1 个问题。如果用户的回答已覆盖某个维度，直接跳到下一个。`
-      : currentRound < maxRounds
-        ? `当前是第 ${currentRound} 轮（共最多 ${maxRounds} 轮）。时间紧迫，总结你已了解的内容，只针对关键缺失信息追问。`
-        : `已达第 ${maxRounds} 轮。不要再提问，也不要输出冗长的架构文档。严格按以下格式回复（全文 150 字以内）：第 1 行明确"信息已足够收敛"；然后用 3-5 个 bullet 列出架构要点（每条 ≤ 20 字，例如"前端 Next.js"、"数据层 Postgres + Qdrant"）；最后一句请用户点击"确认方案"按钮。禁止给出代码、schema 细节或展开说明。`
-
-    const convergenceEn = currentRound <= 6
-      ? `This is round ${currentRound} of ${maxRounds}. Progress through dimensions in order, 1 question per turn. If user's answer already covers a dimension, skip to the next.`
-      : currentRound < maxRounds
-        ? `This is round ${currentRound} of ${maxRounds}. Time is short — summarize what you know, only ask about CRITICAL gaps.`
-        : `Round ${maxRounds} reached. Do NOT ask any more questions and do NOT dump a long architecture document. Reply in under ~150 words: line 1 state "Information gathered is sufficient"; then 3-5 bullets capturing the architecture outline (each ≤ 10 words, e.g. "Frontend: Next.js", "Data: Postgres + Qdrant"); close with one sentence asking the user to click "Start Designing". Do not include code, schema details, or expansions.`
 
     return [
       '# Output Format',
       '',
-      'Respond in Markdown only. Do NOT generate any ```json:canvas-action blocks.',
+      'Respond in Markdown. Do NOT emit any ```json:canvas-action blocks in this phase.',
       '',
-      locale === 'zh' ? '# 需求讨论阶段' : '# Brainstorm Phase',
-      '',
-      locale === 'zh'
-        ? '你需要覆盖以下 6 个维度来理解项目需求：'
-        : 'You must cover these 6 dimensions to understand the project:',
-      '',
-      locale === 'zh' ? dimensionsZh : dimensionsEn,
-      '',
-      locale === 'zh' ? '## 进度与收敛规则' : '## Progress & Convergence Rules',
-      '',
-      locale === 'zh' ? convergenceZh : convergenceEn,
-      '',
-      locale === 'zh'
-        ? [
-            '严格每次只问 1 个问题。如果有明确选项，用编号列出 2-4 个选项供用户选择。选项中不要混入问题。',
-            '',
-            '在每次回复末尾，用 HTML 注释标记进度（对用户不可见）：',
-            '<!-- progress: dimensions_covered=N/6 round=N/8 -->',
-            '',
-            '在你的第一次回复末尾，额外输出标题：<!-- title: 项目标题 -->（不超过15字）。',
-            '',
-            '当所有维度覆盖完毕或轮次用尽时，不要写长篇架构方案。严格按以下格式收敛（全文 ≤150 字）：首行写"信息已足够收敛"；中间 3-5 个 bullet 给架构要点（每条 ≤ 20 字）；末尾一句提示用户点击"确认方案"按钮。禁止展开代码、schema 细节或分层说明——那些留到设计阶段生成。',
-          ].join('\n')
-        : [
-            'STRICTLY ask only 1 question per response. When there are clear options, list 2-4 numbered choices. Do NOT mix questions into option lists.',
-            '',
-            'At the end of every response, add an invisible HTML comment tracking progress:',
-            '<!-- progress: dimensions_covered=N/6 round=N/8 -->',
-            '',
-            'At the end of your first response, also output: <!-- title: Project Title --> (max 15 chars).',
-            '',
-            'When all dimensions are covered or rounds are exhausted, do NOT write a long proposal. Reply in ≤150 words: line 1 = "Information gathered is sufficient", 3-5 short bullets with the architecture outline (≤10 words each), closing line asking the user to click "Start Designing". No code, no schema details, no layered explanations — those belong to the design phase.',
-          ].join('\n'),
-    ].filter(Boolean).join('\n')
+      zh ? bodyZh : bodyEn,
+    ].join('\n')
   }
 
   // canvas agent: discuss, discuss-node, analyze — all support canvas actions
