@@ -196,6 +196,14 @@ async function buildSplitPrompt(
   signal?: AbortSignal,
   ir?: Ir | null,
   brainstormState?: BrainstormState | null,
+  /**
+   * When true, signals the caller delivers this prompt via a real `system`
+   * role (direct-api / custom-api). Takes priority over the UI's backend
+   * label for prompt-shape selection — a payload tagged `backend: 'codex'`
+   * routed through VIBE_LLM_* direct API still gets the long API variant,
+   * not the compact CLI one.
+   */
+  deliversAsSystemRole = false,
 ): Promise<{ system: string; user: string }> {
   const {
     message,
@@ -226,7 +234,9 @@ async function buildSplitPrompt(
     brainstormRound: phase === 'brainstorm'
       ? (history ?? []).filter(m => m.role === 'assistant').length + 1
       : undefined,
-    backend: payload.backend,
+    // For api-role delivery, mask out the UI backend label so the prompt
+    // builder picks the long variant (we have system-role control here).
+    backend: deliversAsSystemRole ? undefined : payload.backend,
     ir,
   })
 
@@ -278,7 +288,7 @@ async function handleDirectApiChat(
   ir?: Ir | null,
   brainstormState?: BrainstormState | null,
 ) {
-  const { system, user } = await buildSplitPrompt(payload, request.signal, ir, brainstormState)
+  const { system, user } = await buildSplitPrompt(payload, request.signal, ir, brainstormState, true)
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -332,7 +342,7 @@ async function handleCustomApiChat(
   const apiBase = (payload.customApiBase ?? '').replace(/\/+$/, '')
   const apiKey = payload.customApiKey ?? ''
   const apiModel = payload.customApiModel || payload.model || 'gpt-4o'
-  const { system, user } = await buildSplitPrompt(payload, request.signal, ir, brainstormState)
+  const { system, user } = await buildSplitPrompt(payload, request.signal, ir, brainstormState, true)
 
   if (!apiBase || !apiKey) {
     return Response.json({ error: 'Custom API base URL and key are required.' }, { status: 400 })

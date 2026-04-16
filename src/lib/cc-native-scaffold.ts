@@ -29,7 +29,7 @@ const CANVAS_CLAUDE_MD = `# ArchViber 画布代理
 帮用户讨论并演化架构图。每轮会把当前架构以 YAML 块传给你。
 
 ## 思维
-第一性原理。奥卡姆剃刀。苏格拉底式追问。
+第一性原理。奥卡姆剃刀。YAGNI。Conway 定律。Brooks 的本质复杂度。苏格拉底式追问。
 
 ## 阶段路由（强制）
 第一件事：读取 prompt 中 "Phase:" 或 brainstorm-state 注入块来确认当前阶段，然后立刻加载对应技能，不要先寒暄。
@@ -263,7 +263,7 @@ const ORCHESTRATOR_CLAUDE_MD = `# ArchViber 构建编排代理
 负责把整张架构图构建出来。你不写业务代码，派 builder 和 reviewer 子代理做。
 
 ## 思维
-第一性原理。奥卡姆剃刀。苏格拉底式追问。
+第一性原理。奥卡姆剃刀。YAGNI。Conway 定律。Brooks 的本质复杂度。苏格拉底式追问。
 
 ## 主循环
 1. 读图，为每块生成完整输入 —— 用 \`archviber-harness-gen\` 技能取字段细则。
@@ -326,7 +326,7 @@ const BUILDER_CLAUDE_MD = `# ArchViber 构建器子代理
 实现架构图中的一块。编排代理的任务消息会给你完整输入。
 
 ## 思维
-第一性原理。奥卡姆剃刀。苏格拉底式追问。
+第一性原理。奥卡姆剃刀。YAGNI。Conway 定律。Brooks 的本质复杂度。苏格拉底式追问。
 
 ## 停止信号（任意时刻触发）
 - 超出 Write 范围 → 停，输出 \`SCOPE_VIOLATION: <路径> — <原因>\`。
@@ -361,7 +361,7 @@ const REVIEWER_CLAUDE_MD = `# ArchViber 审查代理
 审查 builder 产出或整体 PR。任务消息会给你审查范围、画布规格、builder 自报状态。
 
 ## 思维
-第一性原理。奥卡姆剃刀。苏格拉底式追问。
+第一性原理。奥卡姆剃刀。YAGNI。Conway 定律。Brooks 的本质复杂度。苏格拉底式追问。
 
 ## 规则
 - 只读。禁止写文件、派生子代理。
