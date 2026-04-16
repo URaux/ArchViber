@@ -542,6 +542,13 @@ async function handlePersistentChat(
       }
 
       let firstEventAt = 0
+      // Track which assistant-message id -> longest text we've already emitted
+      // for THAT message's text block. CC stream-json semantics: each unique
+      // message (by `message.id`) owns its own text. Within a single message,
+      // subsequent events of the same id may deliver cumulative snapshots —
+      // so we emit only the delta inside a message. Across different messages
+      // (e.g., after a tool round), text is additive — emit it all fresh.
+      const messageTextSeen = new Map<string, number>()
       const onEvent = (event: Record<string, unknown>) => {
         if (closed) return
         if (firstEventAt === 0) {
@@ -554,18 +561,33 @@ async function handlePersistentChat(
           sentSessionId = true
         }
 
-        // Claude stream-json: assistant messages carry content blocks with text
+        // Claude stream-json: assistant messages carry content blocks with text.
+        // A conversation can span multiple assistant messages (tool rounds, etc.);
+        // each message has its own id and its own text payload. Key the delta
+        // accounting per-message-id so later messages' text is always forwarded
+        // instead of being swallowed by a smaller .length check against a global
+        // accumulator.
         if (event['type'] === 'assistant') {
           const message = event['message'] as Record<string, unknown> | undefined
           const content = message?.['content']
+          const messageId = typeof message?.['id'] === 'string' ? (message['id'] as string) : '__no_id__'
           if (Array.isArray(content)) {
+            // Concatenate all text blocks within this message (CC may split a
+            // single assistant turn into multiple text blocks interleaved with
+            // tool_use). For text-only outputs this just returns the whole text.
+            let messageText = ''
             for (const block of content as Array<Record<string, unknown>>) {
               if (block['type'] === 'text' && typeof block['text'] === 'string') {
-                const fullText = block['text'] as string
-                if (fullText.length > textAccumulated.length) {
-                  push({ type: 'chunk', text: fullText.slice(textAccumulated.length) })
-                  textAccumulated = fullText
-                }
+                messageText += block['text'] as string
+              }
+            }
+            if (messageText.length > 0) {
+              const alreadySent = messageTextSeen.get(messageId) ?? 0
+              if (messageText.length > alreadySent) {
+                const delta = messageText.slice(alreadySent)
+                push({ type: 'chunk', text: delta })
+                textAccumulated += delta
+                messageTextSeen.set(messageId, messageText.length)
               }
             }
           }
