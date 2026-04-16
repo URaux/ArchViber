@@ -486,9 +486,15 @@ async function handlePersistentChat(
   // archviber-canvas skill. CC loads them natively (no injected system
   // prompt), and the skill supplies the canvas-action contract only when
   // the user actually asks to edit the diagram.
+  const reqId = `chat-${Date.now().toString(36).slice(-6)}`
+  const log = (stage: string, extra?: Record<string, unknown>) =>
+    console.log('[chat]', reqId, stage, extra ? JSON.stringify(extra) : '')
+
   const workDir = backend === 'claude-code'
     ? await ensureCanvasChatScaffold()
     : process.cwd()
+  log('scaffold-ready', { workDir })
+
   const agent = getPersistentAgent({
     backend,
     workDir,
@@ -498,9 +504,15 @@ async function handlePersistentChat(
   const prompt = agent.hasConversation()
     ? await buildPrompt({ ...payload, history: [] }, request.signal, ir, brainstormState)
     : await buildPrompt(payload, request.signal, ir, brainstormState)
+  log('prompt-built', { promptChars: prompt.length, hasConversation: agent.hasConversation(), resumeSessionId: payload.ccSessionId ?? null })
 
   if (!agent.isAlive()) {
+    log('agent-starting')
+    const startedAt = Date.now()
     await agent.start()
+    log('agent-started', { ms: Date.now() - startedAt })
+  } else {
+    log('agent-alive')
   }
 
   const stream = new ReadableStream<Uint8Array>({
@@ -529,8 +541,13 @@ async function handlePersistentChat(
         controller.enqueue(encodeEvent(event))
       }
 
+      let firstEventAt = 0
       const onEvent = (event: Record<string, unknown>) => {
         if (closed) return
+        if (firstEventAt === 0) {
+          firstEventAt = Date.now()
+          log('first-event', { type: event['type'], hasSessionId: typeof event['session_id'] === 'string' })
+        }
 
         if (!sentSessionId && typeof event['session_id'] === 'string') {
           push({ type: 'session', ccSessionId: event['session_id'] })
@@ -556,6 +573,7 @@ async function handlePersistentChat(
       }
 
       const onDone = () => {
+        log('response-done', { totalChars: textAccumulated.length, msSinceFirstEvent: firstEventAt ? Date.now() - firstEventAt : null })
         persistAndCleanup()
         push({ type: 'done' })
         close()
@@ -572,11 +590,16 @@ async function handlePersistentChat(
         { once: true }
       )
 
-      agent.sendMessage(prompt).catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : String(err)
-        push({ type: 'error', error: `Failed to send message: ${msg}` })
-        close()
-      })
+      log('sending-to-agent', { promptChars: prompt.length })
+      const sentAt = Date.now()
+      agent.sendMessage(prompt)
+        .then(() => log('send-resolved', { ms: Date.now() - sentAt }))
+        .catch((err: unknown) => {
+          const msg = err instanceof Error ? err.message : String(err)
+          log('send-error', { err: msg })
+          push({ type: 'error', error: `Failed to send message: ${msg}` })
+          close()
+        })
     },
     cancel() {
       agent.removeListener('event', () => undefined)
