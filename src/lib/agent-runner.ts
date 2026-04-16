@@ -1,7 +1,8 @@
 import fs from 'fs'
 import path from 'path'
-import { spawn } from 'child_process'
+import { execFileSync, spawn } from 'child_process'
 import { EventEmitter } from 'events'
+import { createRequire } from 'module'
 import type { Writable } from 'stream'
 import { StringDecoder } from 'string_decoder'
 import { getClaudeCliInvocation, getChildIsolationArgs, scrubChildEnv } from '@/lib/claude-cli'
@@ -35,6 +36,10 @@ interface AgentRecord {
   info: AgentProcessInfo
   process: SpawnedProcess
 }
+
+const nodeRequire = createRequire(import.meta.url)
+let cachedGlobalNpmRoot: string | null | undefined
+let didWarnAboutCodexShellFallback = false
 
 function getGeminiWindowsScriptPath() {
   const localGeminiScript = path.join(
@@ -72,29 +77,61 @@ function getGeminiWindowsScriptPath() {
  * word-splitting problem whenever any arg has spaces. Running the bundled
  * JS with node avoids both traps.
  */
-function getCodexScriptPath(): string | null {
-  const localCodexScript = path.join(
-    /* turbopackIgnore: true */ process.cwd(),
-    'node_modules',
-    '@openai',
-    'codex',
-    'bin',
-    'codex.js'
-  )
-  if (fs.existsSync(localCodexScript)) return localCodexScript
+function getCachedGlobalNpmRoot(): string | null {
+  if (cachedGlobalNpmRoot !== undefined) {
+    return cachedGlobalNpmRoot
+  }
 
-  const npmGlobal = process.env.NPM_GLOBAL_PATH ?? 'E:/tools/npm-global'
-  const globalCodexScript = path.join(
-    /* turbopackIgnore: true */ npmGlobal,
-    'node_modules',
-    '@openai',
-    'codex',
-    'bin',
-    'codex.js'
-  )
-  if (fs.existsSync(globalCodexScript)) return globalCodexScript
+  try {
+    const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+    const output = execFileSync(npmCmd, ['root', '-g'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true,
+    })
+    cachedGlobalNpmRoot = output.trim() || null
+  } catch {
+    cachedGlobalNpmRoot = null
+  }
 
-  return null
+  return cachedGlobalNpmRoot
+}
+
+function warnCodexShellFallbackOnce() {
+  if (didWarnAboutCodexShellFallback) {
+    return
+  }
+
+  didWarnAboutCodexShellFallback = true
+  console.warn('[agent-runner] Unable to resolve @openai/codex/bin/codex.js; falling back to codex.cmd with shell=true on Windows.')
+}
+
+export function resolveCodexScriptPath(
+  resolveModule: (request: string) => string = (request) => nodeRequire.resolve(request)
+): string | null {
+  try {
+    return resolveModule('@openai/codex/bin/codex.js')
+  } catch {
+    const globalNpmRoot = getCachedGlobalNpmRoot()
+    if (!globalNpmRoot) {
+      return null
+    }
+
+    const globalCodexScript = path.join(
+      /* turbopackIgnore: true */ globalNpmRoot,
+      '@openai',
+      'codex',
+      'bin',
+      'codex.js'
+    )
+
+    return fs.existsSync(globalCodexScript) ? globalCodexScript : null
+  }
+}
+
+export function resetAgentRunnerTestState() {
+  cachedGlobalNpmRoot = undefined
+  didWarnAboutCodexShellFallback = false
 }
 
 export interface CustomApiConfig {
@@ -124,7 +161,7 @@ function getCommand(backend: AgentBackend, prompt: string, model?: string, ccSes
       // which surfaces as "spawn codex ENOENT". Resolve the bundled codex.js
       // and launch it with node directly — bypasses PATH shim lookup and
       // keeps shell:false so no re-exposure of arg-splitting issues.
-      const codexScript = getCodexScriptPath()
+      const codexScript = resolveCodexScriptPath()
       if (codexScript) {
         return {
           command: process.execPath,
@@ -133,9 +170,7 @@ function getCommand(backend: AgentBackend, prompt: string, model?: string, ccSes
           useShell: false,
         }
       }
-      // Fall back to shell-resolved lookup if we couldn't find the script.
-      // shell:true lets Windows locate codex.cmd via PATHEXT; our args are all
-      // short ASCII flags so cmd quoting stays safe.
+      warnCodexShellFallbackOnce()
       return { command: 'codex', args: codexArgs, pipeStdin: true, useShell: true }
     }
 
