@@ -300,6 +300,10 @@ export function ChatPanel() {
   const [codeContext, setCodeContext] = useState<string | null>(null)
   const [isLoadingCode, setIsLoadingCode] = useState(false)
   const [thinkingMsg, setThinkingMsg] = useState('')
+  // Carousel state: currentCardIndex per message index
+  const [carouselIndices, setCarouselIndices] = useState<Record<number, number>>({})
+  const carouselScrollRefs = useRef<Record<number, HTMLDivElement | null>>({})
+  const carouselCardRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   const activeSession = chatSessions.find((s) => s.id === activeChatSessionId)
   const activeMessages = activeSession?.messages ?? []
@@ -632,7 +636,7 @@ export function ChatPanel() {
       }
 
       const actionBlocks = extractActionBlocks(fullAssistantText)
-      updateAssistantMessage(extractVisibleChatText(fullAssistantText), actionBlocks)
+      updateAssistantMessage(fullAssistantText, actionBlocks)
       // Auto-apply canvas actions when not in brainstorm phase
       const currentPhase = useAppStore.getState().chatSessions.find((s) => s.id === sessionId)?.phase ?? 'brainstorm'
       if (actionBlocks.length > 0 && currentPhase !== 'brainstorm') {
@@ -907,7 +911,7 @@ export function ChatPanel() {
       }
 
       const actionBlocks = extractActionBlocks(fullAssistantText)
-      updateAssistantMessage(extractVisibleChatText(fullAssistantText), actionBlocks)
+      updateAssistantMessage(fullAssistantText, actionBlocks)
     } catch (sendError) {
       const cfe = sendError as Partial<ChatFetchError>
       const message = cfe.kind
@@ -1055,7 +1059,7 @@ export function ChatPanel() {
       }
 
       const actionBlocks = extractActionBlocks(fullAssistantText)
-      updateAssistantMessage(extractVisibleChatText(fullAssistantText), actionBlocks)
+      updateAssistantMessage(fullAssistantText, actionBlocks)
       const currentPhase = useAppStore.getState().chatSessions.find((s) => s.id === sessionId)?.phase ?? 'brainstorm'
       if (actionBlocks.length > 0 && currentPhase !== 'brainstorm') {
         await applyCanvasActions(actionBlocks, messageIndex)
@@ -1204,7 +1208,7 @@ export function ChatPanel() {
 
       {chatOpen ? (
         <>
-          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto py-4">
+          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto py-4">
             {activeMessages.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-500">
                 {t('chat_empty_state')}
@@ -1242,10 +1246,12 @@ export function ChatPanel() {
               let userChoices = isAssistantWithContent
                 ? extractUserChoices(entry.content)
                 : []
-              let strippedContent: string | null = null
+              // Always derive visible text for ChatMarkdown (strips json:user-choice fences and HTML comments)
+              let strippedContent: string | null = isAssistantWithContent
+                ? extractVisibleChatText(entry.content)
+                : null
               if (userChoices.length === 0 && isAssistantWithContent) {
-                const visible = extractVisibleChatText(entry.content)
-                const parsed = parseOptions(visible)
+                const parsed = parseOptions(strippedContent ?? '')
                 if (parsed) {
                   userChoices = [{ question: '', options: parsed.options.map(o => o.text) }]
                   // Strip the numbered list from rendered content to avoid duplication with OptionCards
@@ -1272,10 +1278,10 @@ export function ChatPanel() {
               return (
                 <div
                   key={`${activeChatSessionId}-${messageIndex}`}
-                  className={`rounded-[1.5rem] border px-4 py-3 text-sm shadow-sm ${
+                  className={`max-w-[32rem] rounded-[1.5rem] border px-4 py-3 text-sm shadow-sm ${
                     entry.role === 'user'
-                      ? 'ml-6 border-orange-200 bg-orange-50 text-orange-900'
-                      : 'mr-6 border-slate-200 bg-white text-slate-700'
+                      ? 'ml-6 self-end border-orange-200 bg-orange-50 text-orange-900'
+                      : 'mr-6 self-start border-slate-200 bg-white text-slate-700'
                   }`}
                 >
                   <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
@@ -1315,33 +1321,62 @@ export function ChatPanel() {
                               ))
                             }
                             const answeredCount = userChoices.filter((_, i) => !!entry.choiceSelections?.[i]).length
+                            const currentCardIdx = carouselIndices[messageIndex] ?? 0
+                            const gotoCard = (nextIdx: number) => {
+                              const clamped = Math.max(0, Math.min(userChoices.length - 1, nextIdx))
+                              setCarouselIndices(prev => ({ ...prev, [messageIndex]: clamped }))
+                              const cardEl = carouselCardRefs.current[`${messageIndex}-${clamped}`]
+                              cardEl?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
+                            }
                             return (
                               <div className="mt-3">
-                                <div className="mb-2 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-slate-400">
-                                  {userChoices.map((_, ci) => {
-                                    const answered = !!entry.choiceSelections?.[ci]
-                                    return (
-                                      <span
-                                        key={ci}
-                                        className={`h-1.5 w-1.5 rounded-full transition ${answered ? 'bg-orange-400' : 'bg-slate-300'}`}
-                                      />
-                                    )
-                                  })}
-                                  <span className="ml-1 font-semibold tabular-nums">
-                                    {answeredCount}/{userChoices.length}
+                                {/* nav bar: arrows + counter + swipe hint */}
+                                <div className="mb-2 flex items-center gap-2 text-[10px] text-slate-400">
+                                  <button
+                                    type="button"
+                                    aria-label={locale === 'zh' ? '上一张' : 'Previous card'}
+                                    onClick={() => gotoCard(currentCardIdx - 1)}
+                                    disabled={currentCardIdx === 0}
+                                    className="flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 bg-white transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-30"
+                                  >
+                                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                                  </button>
+                                  <span className="font-semibold tabular-nums">
+                                    {currentCardIdx + 1} / {userChoices.length}
                                   </span>
-                                  <span className="ml-auto normal-case tracking-normal text-slate-300">
-                                    {locale === 'zh' ? '左右滑动' : 'swipe →'}
+                                  <span className="text-slate-300">
+                                    {locale === 'zh'
+                                      ? `已答 ${answeredCount}/${userChoices.length}`
+                                      : `${answeredCount}/${userChoices.length} answered`}
                                   </span>
+                                  <button
+                                    type="button"
+                                    aria-label={locale === 'zh' ? '下一张' : 'Next card'}
+                                    onClick={() => gotoCard(currentCardIdx + 1)}
+                                    disabled={currentCardIdx === userChoices.length - 1}
+                                    className="flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 bg-white transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-30"
+                                  >
+                                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                                  </button>
+                                  {userChoices.length > 1 ? (
+                                    <span className="ml-auto text-[10px] normal-case tracking-normal text-slate-300">
+                                      {locale === 'zh' ? '左右滑动' : 'swipe →'}
+                                    </span>
+                                  ) : null}
                                 </div>
-                                <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:thin]">
+                                {/* card scroll track */}
+                                <div
+                                  ref={(el) => { carouselScrollRefs.current[messageIndex] = el }}
+                                  className="-mx-4 flex snap-x snap-mandatory overflow-x-auto px-4 pb-2 [scrollbar-width:none]"
+                                >
                                   {userChoices.map((choice, ci) => {
                                     const persistedTrace = entry.choiceSelections?.[ci]
                                     const isAnswered = !!persistedTrace
                                     return (
                                       <div
                                         key={ci}
-                                        className="w-[88%] shrink-0 snap-center sm:w-[70%]"
+                                        ref={(el) => { carouselCardRefs.current[`${messageIndex}-${ci}`] = el }}
+                                        className="w-full shrink-0 snap-center"
                                       >
                                         {choice.question ? (
                                           <div className="mb-1 flex items-center gap-2 text-xs font-medium text-slate-600">

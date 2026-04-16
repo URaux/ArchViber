@@ -18,7 +18,7 @@ import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-const SCAFFOLD_VERSION = 7
+const SCAFFOLD_VERSION = 8
 
 // ---------------------------------------------------------------------------
 // Canvas chat — brainstorm / design / iterate with the user
@@ -130,25 +130,28 @@ description: Use when the user starts a new architecture discussion or has not y
 
 \`\`\`json:user-choice
 {
-  "question": "你最想解决什么问题？",
+  "question": "你最想解决什么问题？（按重要度排序，可多选）",
   "options": ["个人笔记和知识管理", "团队文档协同", "给 AI 提供上下文记忆", "其他"],
-  "multi": false
+  "multi": true,
+  "ordered": true
 }
 \`\`\`
 
 \`\`\`json:user-choice
 {
-  "question": "谁来用？预期规模？",
+  "question": "谁来用？预期规模？（按相关度排序，可多选）",
   "options": ["只有我", "3-10 人小团队", "50+ 人团队", "公开对所有人"],
-  "multi": false
+  "multi": true,
+  "ordered": true
 }
 \`\`\`
 
 \`\`\`json:user-choice
 {
-  "question": "核心功能选 3-5 个",
+  "question": "核心功能选 3-5 个（按优先级排序）",
   "options": ["全文搜索", "语义搜索", "AI 问答", "自动摘要", "标签/目录", "协作评论", "版本历史", "不懂，请解释"],
   "multi": true,
+  "ordered": true,
   "min": 3,
   "max": 5
 }
@@ -173,11 +176,12 @@ description: Use when the user starts a new architecture discussion or has not y
 
 ### 字段规则
 
-- \`multi\`: false → radio；true → checkbox 列表
+- **默认 \`multi: true, ordered: true\`** — 大多数需求梳理题都是"按重要度/相关度排序选几个"，排序本身就是信号。单选仅用于真正互斥的题（是/否、二选一的技术栈、严格互斥的模式）。
+- \`multi\`: false → radio（仅用于互斥题）；true → checkbox 列表
+- \`ordered: true\` → 多选项带序号 ①②③，代表用户按重要度/优先级排的顺序；**绝大多数多选题都该开**
 - \`min\`: 软提示；\`max\`: 硬上限（前端校验，超出禁止提交）
 - \`allowCustom: true\` → 追加「其他（自己填）」文本输入；选项不可能穷举时用
 - \`allowIndifferent: true\` → 追加「无所谓」选项（置底）；维度题用户可能没偏好时用
-- \`ordered: true\` → 多选项带序号 ①②③，**仅当顺序有语义**（如「优先级排序」）才开
 - 选项里禁止再嵌问题；问题写在 \`question\`
 - 每张卡建议至少 1 个「不懂，请解释」或「其他」兜底项（NOVICE 必带）
 
