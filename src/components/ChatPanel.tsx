@@ -23,10 +23,11 @@ import type {
 type CanvasNode = Node<CanvasNodeData>
 
 interface StreamEvent {
-  type: 'chunk' | 'done' | 'error' | 'session'
+  type: 'chunk' | 'done' | 'error' | 'session' | 'session-reset'
   text?: string
   error?: string
   ccSessionId?: string
+  staleSessionId?: string
 }
 
 type ChoiceTrace = { selections: string[]; ordered: boolean }
@@ -651,6 +652,12 @@ export function ChatPanel() {
               updateChatSession(sessionId, { ccSessionId: streamEvent.ccSessionId })
               continue
             }
+            if (streamEvent.type === 'session-reset') {
+              // CC rejected our stored session id; clear it so the next turn
+              // starts fresh instead of re-triggering the same error.
+              updateChatSession(sessionId, { ccSessionId: undefined })
+              continue
+            }
             if (streamEvent.type === 'chunk' && streamEvent.text) {
               fullAssistantText += streamEvent.text
               const nextVisibleText = extractVisibleChatText(fullAssistantText)
@@ -1089,6 +1096,10 @@ export function ChatPanel() {
             updateChatSession(sessionId, { ccSessionId: streamEvent.ccSessionId })
             continue
           }
+          if (streamEvent.type === 'session-reset') {
+            updateChatSession(sessionId, { ccSessionId: undefined })
+            continue
+          }
           if (streamEvent.type === 'chunk' && streamEvent.text) {
             fullAssistantText += streamEvent.text
             const nextVisibleText = extractVisibleChatText(fullAssistantText)
@@ -1233,6 +1244,12 @@ export function ChatPanel() {
           for (const streamEvent of events) {
             if (streamEvent.type === 'session' && streamEvent.ccSessionId) {
               updateChatSession(sessionId, { ccSessionId: streamEvent.ccSessionId })
+              continue
+            }
+            if (streamEvent.type === 'session-reset') {
+              // CC rejected our stored session id; clear it so the next turn
+              // starts fresh instead of re-triggering the same error.
+              updateChatSession(sessionId, { ccSessionId: undefined })
               continue
             }
             if (streamEvent.type === 'chunk' && streamEvent.text) {

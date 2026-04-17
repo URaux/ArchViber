@@ -626,14 +626,54 @@ async function handlePersistentChat(
 
       log('sending-to-agent', { promptChars: prompt.length })
       const sentAt = Date.now()
-      agent.sendMessage(prompt)
-        .then(() => log('send-resolved', { ms: Date.now() - sentAt }))
-        .catch((err: unknown) => {
+
+      // CC returns "No conversation found with session ID: X" when the stored
+      // ccSessionId refers to a CC session that no longer exists (CC state
+      // wiped, process restart, cache cleanup). Detect that specific case,
+      // reset the agent without --resume, tell the client to clear its stored
+      // ccSessionId, and retry once so the user isn't stranded.
+      const sendWithStaleResumeRecovery = async () => {
+        try {
+          await agent.sendMessage(prompt)
+          log('send-resolved', { ms: Date.now() - sentAt })
+        } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
-          log('send-error', { err: msg })
-          push({ type: 'error', error: `Failed to send message: ${msg}` })
-          close()
-        })
+          const isStaleResume =
+            /no conversation found/i.test(msg) ||
+            /session(?: id)?.*not found/i.test(msg)
+          if (!isStaleResume || !payload.ccSessionId) {
+            log('send-error', { err: msg })
+            push({ type: 'error', error: `Failed to send message: ${msg}` })
+            close()
+            return
+          }
+
+          log('stale-resume-detected', { staleSessionId: payload.ccSessionId })
+          agent.kill()
+          // Recreate the agent with no resume id; subsequent stream events
+          // will carry a fresh session_id that the client picks up via 'session'.
+          const freshAgent = getPersistentAgent({
+            backend,
+            workDir,
+            model: payload.model,
+            resumeSessionId: undefined,
+          })
+          freshAgent.on('event', onEvent)
+          freshAgent.on('response-done', onDone)
+          push({ type: 'session-reset', staleSessionId: payload.ccSessionId })
+          await freshAgent.start()
+          try {
+            await freshAgent.sendMessage(prompt)
+            log('send-resolved-after-reset', { ms: Date.now() - sentAt })
+          } catch (retryErr) {
+            const rmsg = retryErr instanceof Error ? retryErr.message : String(retryErr)
+            log('send-error-after-reset', { err: rmsg })
+            push({ type: 'error', error: `Failed to send message: ${rmsg}` })
+            close()
+          }
+        }
+      }
+      void sendWithStaleResumeRecovery()
     },
     cancel() {
       agent.removeListener('event', () => undefined)
