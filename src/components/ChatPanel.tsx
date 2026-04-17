@@ -1624,6 +1624,47 @@ export function ChatPanel() {
                                     )
                                   })}
                                 </div>
+                                {/* Batch-submit escape hatch: jumps to first unanswered card, or fires batch when all answered */}
+                                {(() => {
+                                  const allAnswered = answeredCount >= userChoices.length
+                                  const firstUnanswered = userChoices.findIndex((_, i) => !hasAnswerAt(i))
+                                  const isLast = currentCardIdx === userChoices.length - 1
+                                  if (!isLast && !allAnswered) return null
+                                  return (
+                                    <div className="mt-2 flex items-center justify-between gap-2 border-t border-slate-100 pt-2">
+                                      <span className="text-[11px] text-slate-500">
+                                        {allAnswered
+                                          ? (locale === 'zh' ? '全部已作答，点击提交。' : 'All answered — submit to continue.')
+                                          : (locale === 'zh' ? `还有 ${userChoices.length - answeredCount} 题未答` : `${userChoices.length - answeredCount} unanswered`)}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        disabled={!allAnswered && firstUnanswered < 0}
+                                        onClick={() => {
+                                          if (allAnswered) {
+                                            const turnPending = pendingSubmissionsRef.current[messageIndex] ?? {}
+                                            const firstIdx = Object.keys(turnPending)[0]
+                                            if (firstIdx !== undefined) {
+                                              const ci = Number(firstIdx)
+                                              void handleFormSubmission(messageIndex, ci, turnPending[ci], userChoices.length)
+                                            }
+                                          } else if (firstUnanswered >= 0) {
+                                            gotoCard(firstUnanswered)
+                                          }
+                                        }}
+                                        className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                                          allAnswered
+                                            ? 'bg-orange-500 text-white hover:bg-orange-600'
+                                            : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                                        }`}
+                                      >
+                                        {allAnswered
+                                          ? (locale === 'zh' ? '提交全部' : 'Submit all')
+                                          : (locale === 'zh' ? '跳到未答题' : 'Jump to unanswered')}
+                                      </button>
+                                    </div>
+                                  )
+                                })()}
                               </div>
                             )
                           })()}
