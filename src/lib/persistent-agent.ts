@@ -191,11 +191,31 @@ class PersistentAgent extends EventEmitter {
 
         if (event.type === 'result') {
           if (event.is_error) {
-            const errors = Array.isArray(event.errors)
-              ? event.errors.map((entry) => String(entry)).join('\n')
-              : ''
+            // CC surfaces API / turn failures here. The useful message can
+            // live in `errors`, `result`, or `message.content` depending on
+            // the CC version — pull the first one that carries text so the
+            // user sees "API Error: ... ECONNRESET" rather than the meaningless
+            // fallback "Claude Code turn failed (success)".
+            const pieces: string[] = []
+            if (Array.isArray(event.errors)) {
+              pieces.push(...event.errors.map((entry) => String(entry)))
+            }
+            if (typeof event.result === 'string' && event.result.trim()) {
+              pieces.push(event.result.trim())
+            }
+            const maybeContent = (event as { message?: { content?: unknown } }).message?.content
+            if (typeof maybeContent === 'string' && maybeContent.trim()) {
+              pieces.push(maybeContent.trim())
+            }
+            // Include any trailing stderr so transport-layer failures are
+            // attributable (ECONNRESET, DNS, proxy).
+            const stderrSnippet = this.stderrTail.trim().slice(-500)
+            const message = pieces.filter(Boolean).join('\n').trim()
+            const detail = stderrSnippet ? `\nstderr: ${stderrSnippet}` : ''
             this.rejectActiveTurn(
-              new Error(errors || `Claude Code turn failed (${event.subtype ?? 'error'})`)
+              new Error(
+                (message || `Claude Code turn failed (${event.subtype ?? 'error'})`) + detail
+              )
             )
             continue
           }
