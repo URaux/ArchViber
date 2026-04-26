@@ -729,7 +729,7 @@ export async function POST(request: Request) {
   // Load canonical IR from disk once per request. Non-blocking: null on any failure.
   const ir = await tryLoadIr()
 
-  if (process.env.ARCHVIBER_ORCHESTRATOR === '1' && ir) {
+  if (process.env.ARCHVIBER_ORCHESTRATOR !== '0' && ir) {
     const orchestratorResponse = await runOrchestratorTurn({ payload, ir, request })
     if (orchestratorResponse) return orchestratorResponse
     // null → fall through to legacy path (handler returned not_implemented)

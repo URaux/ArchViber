@@ -5,12 +5,13 @@
  * Called by .github/workflows/eval.yml after `npm ci`.
  *
  * Usage:
- *   node scripts/run-eval-ci.mjs
+ *   node scripts/run-eval-ci.mjs            # blocking — fails on threshold breach
+ *   node scripts/run-eval-ci.mjs --advisory # legacy advisory mode (always exits 0)
  *
  * Output:
  *   eval-results.json  (repo root) — consumed by actions/upload-artifact
  *
- * Exit code: always 0 (advisory gate; D10 adds blocking thresholds).
+ * Thresholds (P2.W1.D9): classifier accuracy ≥ 0.90, dispatch error rate ≤ 0.05, explainShapeFails = 0.
  */
 
 import { createRequire } from 'module'
@@ -19,20 +20,21 @@ import path from 'path'
 import fs from 'fs'
 import jiti from '../node_modules/jiti/lib/jiti.mjs'
 
+const THRESHOLDS = {
+  classifierAccuracyMin: 0.9,
+  dispatchErrorRateMax: 0.05,
+  explainShapeFailsMax: 0,
+}
+
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const repoRoot = path.resolve(__dirname, '..')
 
-// Create a jiti instance that understands TypeScript and the @/ alias.
 const require = jiti(__filename, {
-  alias: {
-    '@': path.join(repoRoot, 'src'),
-  },
-  // jiti v2: use interopDefault so default exports work correctly
+  alias: { '@': path.join(repoRoot, 'src') },
   interopDefault: true,
 })
 
-// Load the TypeScript modules via jiti.
 const { loadFixtures } = require(path.join(repoRoot, 'tests/eval/orchestrator/load-fixtures.ts'))
 const { runEval } = require(path.join(repoRoot, 'tests/eval/orchestrator/run-eval.ts'))
 const { emitMetrics } = require(path.join(repoRoot, 'tests/eval/orchestrator/emit-metrics.ts'))
@@ -63,11 +65,46 @@ async function main() {
 
   console.log(`[run-eval-ci] Writing ${outPath}...`)
   emitMetrics(report, outPath)
-  console.log('[run-eval-ci] Done. Exit 0 (advisory gate).')
+
+  const advisory = process.argv.includes('--advisory')
+  const dispatchTotal = report.dispatch.totalCount
+  const dispatchErrorRate = dispatchTotal > 0 ? report.dispatch.errorCount / dispatchTotal : 0
+
+  const failures = []
+  if (report.accuracy < THRESHOLDS.classifierAccuracyMin) {
+    failures.push(
+      `classifier accuracy ${(report.accuracy * 100).toFixed(1)}% < ${(THRESHOLDS.classifierAccuracyMin * 100).toFixed(0)}%`
+    )
+  }
+  if (dispatchErrorRate > THRESHOLDS.dispatchErrorRateMax) {
+    failures.push(
+      `dispatch error rate ${(dispatchErrorRate * 100).toFixed(1)}% > ${(THRESHOLDS.dispatchErrorRateMax * 100).toFixed(0)}%`
+    )
+  }
+  if (report.dispatch.explainShapeFails > THRESHOLDS.explainShapeFailsMax) {
+    failures.push(`explainShapeFails ${report.dispatch.explainShapeFails} > ${THRESHOLDS.explainShapeFailsMax}`)
+  }
+
+  if (failures.length === 0) {
+    console.log('[run-eval-ci] Done. All thresholds passed. Exit 0.')
+    return
+  }
+
+  console.error('[run-eval-ci] Threshold failures:')
+  for (const f of failures) console.error(`  - ${f}`)
+
+  if (advisory) {
+    console.warn('[run-eval-ci] --advisory flag set, exiting 0 despite failures.')
+    return
+  }
+
+  process.exit(1)
 }
 
 main().catch((err) => {
   console.error('[run-eval-ci] Fatal:', err)
-  // Still exit 0 — advisory only until D10.
-  process.exit(0)
+  if (process.argv.includes('--advisory')) {
+    process.exit(0)
+  }
+  process.exit(1)
 })
