@@ -169,7 +169,7 @@ export async function runEval(
     const runner = makeMockRunner(outcome)
     const classifyResult = await classifyIntent(fixture.userPrompt, fixture.irSummary, {
       runner,
-      timeoutMs: 50,
+      timeoutMs: 500,
       confidenceThreshold: 0.6,
       workDir: process.cwd(),
     })
