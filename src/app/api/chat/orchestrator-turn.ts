@@ -45,6 +45,27 @@ export function stringifyHandlerResult(result: HandlerResult): string {
     return payload?.content ?? ''
   }
 
+  if (result.intent === 'build' && result.status === 'ok') {
+    const payload = result.payload as { plan: { dispatchUrl: string }; summary: string } | undefined
+    return payload?.summary ?? ''
+  }
+
+  if (result.intent === 'modify' && result.status === 'ok') {
+    const payload = result.payload as
+      | { branch?: string; sha?: string; sandboxResult?: { tscOk: boolean; testsOk: boolean } }
+      | undefined
+    if (!payload) return 'Modify completed.'
+    const branch = payload.branch ?? '(unknown branch)'
+    const sha = payload.sha ? payload.sha.slice(0, 7) : ''
+    const tsc = payload.sandboxResult ? (payload.sandboxResult.tscOk ? 'tsc ok' : 'tsc fail') : 'tsc skipped'
+    const tests = payload.sandboxResult
+      ? payload.sandboxResult.testsOk
+        ? 'tests ok'
+        : 'tests fail'
+      : 'tests skipped'
+    return `Rename committed on ${branch}${sha ? ' (' + sha + ')' : ''}. Sandbox: ${tsc}, ${tests}.`
+  }
+
   return `${result.intent}\n${JSON.stringify(result.payload, null, 2)}`
 }
 
