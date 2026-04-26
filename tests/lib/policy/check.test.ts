@@ -12,6 +12,7 @@ function summary(overrides: Partial<DriftSummary> = {}): DriftSummary {
     removedContainers: 0,
     addedEdges: 0,
     removedEdges: 0,
+    changedContainers: 0,
     total: 0,
   }
   return { ...base, ...overrides }

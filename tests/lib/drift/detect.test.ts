@@ -162,3 +162,12 @@ describe('detectDrift', () => {
     expect(summary.total).toBe(4) // 1 added block + 1 changed + 1 added container + 1 removed edge
   })
 })
+
+  it('detects changed containers (name/color)', () => {
+    const base = makeIr({ containers: [{ id: 'c1', name: 'API', color: 'blue' }] })
+    const head = makeIr({ containers: [{ id: 'c1', name: 'Renamed', color: 'green' }] })
+    const r = detectDrift(base, head)
+    expect(r.changedContainers).toHaveLength(1)
+    expect(r.changedContainers[0].changes).toHaveLength(2)
+    expect(r.clean).toBe(false)
+  })

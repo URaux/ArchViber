@@ -8,7 +8,7 @@
  * chat with bullets.
  */
 
-import type { DriftReport, BlockChange } from './detect'
+import type { DriftReport, BlockChange, ContainerChange } from './detect'
 
 const MAX_PER_SECTION = 8
 
@@ -27,6 +27,12 @@ function renderBlockChange(c: BlockChange): string {
   return `${id} (${before}): ${changes}`
 }
 
+function renderContainerChange(c: ContainerChange): string {
+  const id = c.before.id
+  const before = c.before.name
+  return `${id} (${before}): ${c.changes.join('; ')}`
+}
+
 export function renderDriftMarkdown(report: DriftReport): string {
   if (report.clean) {
     return 'Diagram and code are in sync. No drift detected.'
@@ -40,6 +46,7 @@ export function renderDriftMarkdown(report: DriftReport): string {
     report.changedBlocks.length > 0 ? `~${report.changedBlocks.length} blocks` : '',
     report.addedContainers.length > 0 ? `+${report.addedContainers.length} containers` : '',
     report.removedContainers.length > 0 ? `−${report.removedContainers.length} containers` : '',
+    report.changedContainers.length > 0 ? `~${report.changedContainers.length} containers` : '',
     report.addedEdges.length > 0 ? `+${report.addedEdges.length} edges` : '',
     report.removedEdges.length > 0 ? `−${report.removedEdges.length} edges` : '',
   ]
@@ -76,6 +83,12 @@ export function renderDriftMarkdown(report: DriftReport): string {
   if (report.removedContainers.length > 0) {
     out.push('**Removed containers**:')
     out.push(...truncatedList(report.removedContainers, (c) => `\`${c.id}\` (${c.name})`))
+    out.push('')
+  }
+
+  if (report.changedContainers.length > 0) {
+    out.push('**Changed containers**:')
+    out.push(...truncatedList(report.changedContainers, renderContainerChange))
     out.push('')
   }
 

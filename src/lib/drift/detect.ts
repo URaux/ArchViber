@@ -17,6 +17,13 @@ export interface BlockChange {
   changes: string[]
 }
 
+export interface ContainerChange {
+  containerId: string
+  before: IrContainer
+  after: IrContainer
+  changes: string[]
+}
+
 export interface DriftReport {
   addedBlocks: IrBlock[]
   removedBlocks: IrBlock[]
@@ -24,6 +31,8 @@ export interface DriftReport {
 
   addedContainers: IrContainer[]
   removedContainers: IrContainer[]
+  /** Phase 3 extension: containers whose name/color changed without losing identity. */
+  changedContainers: ContainerChange[]
 
   addedEdges: IrEdge[]
   removedEdges: IrEdge[]
@@ -87,6 +96,17 @@ function anchorsEqual(a: IrBlock['code_anchors'], b: IrBlock['code_anchors']): b
   return true
 }
 
+function detectContainerChanges(before: IrContainer, after: IrContainer): string[] {
+  const changes: string[] = []
+  if (before.name !== after.name) {
+    changes.push(`name: "${before.name}" → "${after.name}"`)
+  }
+  if (before.color !== after.color) {
+    changes.push(`color: ${before.color} → ${after.color}`)
+  }
+  return changes
+}
+
 function detectBlockChanges(before: IrBlock, after: IrBlock): string[] {
   const changes: string[] = []
 
@@ -118,12 +138,21 @@ export function detectDrift(baseIr: Ir, headIr: Ir): DriftReport {
     }
   }
 
+  const changedContainers: ContainerChange[] = []
+  for (const { before, after } of containerDiff.common) {
+    const changes = detectContainerChanges(before, after)
+    if (changes.length > 0) {
+      changedContainers.push({ containerId: before.id, before, after, changes })
+    }
+  }
+
   const clean =
     blockDiff.added.length === 0 &&
     blockDiff.removed.length === 0 &&
     changedBlocks.length === 0 &&
     containerDiff.added.length === 0 &&
     containerDiff.removed.length === 0 &&
+    changedContainers.length === 0 &&
     edgeDiff.added.length === 0 &&
     edgeDiff.removed.length === 0
 
@@ -133,6 +162,7 @@ export function detectDrift(baseIr: Ir, headIr: Ir): DriftReport {
     changedBlocks,
     addedContainers: containerDiff.added,
     removedContainers: containerDiff.removed,
+    changedContainers,
     addedEdges: edgeDiff.added,
     removedEdges: edgeDiff.removed,
     clean,
@@ -145,6 +175,7 @@ export interface DriftSummary {
   changedBlocks: number
   addedContainers: number
   removedContainers: number
+  changedContainers: number
   addedEdges: number
   removedEdges: number
   total: number
@@ -157,6 +188,7 @@ export function summarizeDrift(report: DriftReport): DriftSummary {
     changedBlocks: report.changedBlocks.length,
     addedContainers: report.addedContainers.length,
     removedContainers: report.removedContainers.length,
+    changedContainers: report.changedContainers.length,
     addedEdges: report.addedEdges.length,
     removedEdges: report.removedEdges.length,
     total: 0,
@@ -167,6 +199,7 @@ export function summarizeDrift(report: DriftReport): DriftSummary {
     summary.changedBlocks +
     summary.addedContainers +
     summary.removedContainers +
+    summary.changedContainers +
     summary.addedEdges +
     summary.removedEdges
   return summary
