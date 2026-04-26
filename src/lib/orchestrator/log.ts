@@ -1,4 +1,4 @@
-import { promises as fs } from 'node:fs'
+﻿import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { INTENTS } from './types'
 import type { Intent } from './types'
@@ -30,7 +30,7 @@ export async function appendClassifyLog(
 }
 
 // ---------------------------------------------------------------------------
-// Telemetry ring buffer — last 100 turns, in-memory only.
+// Telemetry ring buffer -- last 100 turns, in-memory only.
 // ---------------------------------------------------------------------------
 
 export interface TurnRecord {
@@ -91,4 +91,92 @@ export function recordDispatch(
   record.dispatchStatus = params.status
   record.error = params.error
   if (DEBUG) console.log('[orchestrator/telemetry] dispatch', params)
+
+  // Phase 3 persistent telemetry: append the finalized turn to disk.
+  // The ring buffer is in-memory only; for default-on production usage we
+  // need queryable history. Fire-and-forget -- we don't await this in the
+  // hot chat path, and a write failure logs to stderr but never throws.
+  void persistTurn(record)
+}
+
+// ---------------------------------------------------------------------------
+// Persistent telemetry (Phase 3) -- appends finalized turns to a JSONL file
+// at .archviber/cache/orchestrator-log.jsonl. Override the path via
+// ARCHVIBER_TELEMETRY_FILE; disable entirely with ARCHVIBER_TELEMETRY=0.
+// Size-based rotation: when the file exceeds ARCHVIBER_TELEMETRY_MAX_BYTES
+// (default 10 MB), it is renamed to <file>.1 and a fresh log is started.
+// Only one rotation file is kept -- older history is overwritten; that's fine.
+// ---------------------------------------------------------------------------
+
+const DEFAULT_TELEMETRY_PATH = path.join('.archviber', 'cache', 'orchestrator-log.jsonl')
+export const DEFAULT_LOG_MAX_BYTES = 10 * 1024 * 1024 // 10 MB
+
+function telemetryEnabled(): boolean {
+  return process.env.ARCHVIBER_TELEMETRY !== '0'
+}
+
+function telemetryPath(): string {
+  return process.env.ARCHVIBER_TELEMETRY_FILE ?? DEFAULT_TELEMETRY_PATH
+}
+
+function telemetryMaxBytes(): number {
+  const raw = process.env.ARCHVIBER_TELEMETRY_MAX_BYTES
+  if (raw !== undefined) {
+    const parsed = Number(raw)
+    if (!Number.isNaN(parsed) && parsed > 0) return parsed
+  }
+  return DEFAULT_LOG_MAX_BYTES
+}
+
+export async function persistTurn(record: TurnRecord): Promise<void> {
+  if (!telemetryEnabled()) return
+  const target = telemetryPath()
+  try {
+    await fs.mkdir(path.dirname(target), { recursive: true })
+    await fs.appendFile(target, `${JSON.stringify(record)}\n`, 'utf8')
+
+    // Size-based rotation: check size after write; rotate if over the limit.
+    const maxBytes = telemetryMaxBytes()
+    let stat: Awaited<ReturnType<typeof fs.stat>>
+    try {
+      stat = await fs.stat(target)
+    } catch {
+      return // file gone between write and stat -- nothing to rotate
+    }
+    if (stat.size > maxBytes) {
+      const rotated = `${target}.1`
+      try {
+        await fs.rename(target, rotated)
+      } catch (renameErr) {
+        if (DEBUG) console.warn('[orchestrator/telemetry] rotation rename failed', renameErr)
+      }
+    }
+  } catch (error) {
+    // Fire-and-forget; never break the chat path on a write failure.
+    if (DEBUG) console.warn('[orchestrator/telemetry] persistTurn failed', error)
+  }
+}
+
+/** Read the last N entries from the persistent log. Used by dashboards/tests. */
+export async function readRecentPersistedTurns(limit = 100): Promise<TurnRecord[]> {
+  const target = telemetryPath()
+  let text: string
+  try {
+    text = await fs.readFile(target, 'utf8')
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code
+    if (code === 'ENOENT') return []
+    throw err
+  }
+  const lines = text.split('\n').filter((l) => l.length > 0)
+  const tail = lines.slice(Math.max(0, lines.length - limit))
+  const out: TurnRecord[] = []
+  for (const line of tail) {
+    try {
+      out.push(JSON.parse(line) as TurnRecord)
+    } catch {
+      // Skip malformed lines silently -- don't block reads on a stray bad write.
+    }
+  }
+  return out
 }
