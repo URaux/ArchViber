@@ -26,7 +26,25 @@ describe('planRename', () => {
     }
   })
 
-  it('Test 2: collision — BarService already declared → conflict kind collision', async () => {
+  it('Test 2: collision — BarService already in SAME file → conflict kind collision', async () => {
+    // Per W1 D10.5 fixup #3: collision check is scoped to the same source file as the
+    // declaration; cross-file same-name decls live in different module scopes.
+    const { projectRoot, cleanup } = await makeTmpProject({
+      'tsconfig.json': JSON.stringify({ compilerOptions: { strict: true } }),
+      'src/foo.ts': `export class FooService {}\nexport class BarService {}\n`,
+    })
+
+    try {
+      const plan = await planRename(projectRoot, 'FooService', 'BarService')
+      const collision = plan.conflicts.find((c) => c.kind === 'collision')
+      expect(collision).toBeDefined()
+      expect(collision?.message).toMatch(/BarService/)
+    } finally {
+      await cleanup()
+    }
+  })
+
+  it('Test 2b: same-name decls in DIFFERENT files do NOT collide (SEV2 fixup #3 regression)', async () => {
     const { projectRoot, cleanup } = await makeTmpProject({
       'tsconfig.json': JSON.stringify({ compilerOptions: { strict: true } }),
       'src/foo.ts': `export class FooService {}\n`,
@@ -36,8 +54,7 @@ describe('planRename', () => {
     try {
       const plan = await planRename(projectRoot, 'FooService', 'BarService')
       const collision = plan.conflicts.find((c) => c.kind === 'collision')
-      expect(collision).toBeDefined()
-      expect(collision?.message).toMatch(/BarService/)
+      expect(collision).toBeUndefined()
     } finally {
       await cleanup()
     }

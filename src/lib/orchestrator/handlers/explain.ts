@@ -10,7 +10,10 @@ const DEFAULT_BACKEND: AgentBackend = 'codex'
 const DEFAULT_MODEL = 'gpt-5-codex-mini'
 const POLL_INTERVAL_MS = 25
 
-const FORBIDDEN_VERB_RE = /\b(rename|build|spawn|run|refactor|modify)\s+\w/i
+// Imperative-only: line-leading or sentence-leading verb (after `.`/`!`/`?` plus space).
+// Avoids false positives on prose like "the build pipeline runs ..." while still catching
+// explicit commands like "rename FooService to BarService".
+const FORBIDDEN_VERB_RE = /(?:^|[.!?]\s+)(rename|build|spawn|run|refactor|modify)\s+\w/im
 
 const SYSTEM_PROMPT_BASE =
   'You are an architecture explainer for ArchViber. Given the user question and provided IR summary + anchor file paths, give a plain-text answer in 2-5 sentences. Cite at least one block name or file path from the provided context. Do NOT use tool-action verbs (rename, build, spawn, run, modify, refactor). Output plain prose; no markdown headers, no bullet lists, no code fences.'

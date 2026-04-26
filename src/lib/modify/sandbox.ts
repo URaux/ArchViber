@@ -76,7 +76,19 @@ export async function runSandbox(
 
   try {
     await fs.mkdir(tmpDir, { recursive: true })
-    await fs.cp(projectRoot, tmpDir, { recursive: true })
+    // SEV2 fixup #2: exclude bulky/irrelevant trees from the sandbox copy.
+    // node_modules alone can be 500MB+ on real projects; copying it per rename
+    // wastes wall time and can blow the 30s tsc timeout.
+    const SKIP = new Set(['node_modules', '.git', '.next', 'dist', 'out', '.archviber'])
+    await fs.cp(projectRoot, tmpDir, {
+      recursive: true,
+      filter: (src) => {
+        const rel = path.relative(projectRoot, src)
+        if (!rel) return true
+        const top = rel.split(path.sep)[0]
+        return !SKIP.has(top)
+      },
+    })
 
     // Apply plan to tmp copy using path mapping
     const mappedPlan: RenamePlan = {

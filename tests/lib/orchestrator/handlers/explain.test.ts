@@ -103,8 +103,10 @@ describe('explain handler', () => {
     expect(result.error).toMatch(/grounding/i)
   })
 
-  it('Test 4: prose containing forbidden verb "rename" → status error mentioning forbidden verb', async () => {
-    const prose = 'You should rename the Canvas Editor to improve clarity in the codebase.'
+  it('Test 4: imperative-form forbidden verb at line start → status error mentioning forbidden verb', async () => {
+    // Per W1 D10.5 fixup #6: forbidden verb regex only fires on line-leading or sentence-leading
+    // imperative form. Mid-prose "should rename" does NOT trigger (false-positive avoidance).
+    const prose = 'Rename the Canvas Editor to ClearerEditor for better naming.'
     const runner = new MockRunner([{ type: 'done', output: prose }])
     const handler = makeExplainHandler({ runner, timeoutMs: 100 })
 
@@ -113,6 +115,17 @@ describe('explain handler', () => {
     expect(result.intent).toBe('explain')
     expect(result.status).toBe('error')
     expect(result.error).toMatch(/forbidden/i)
+  })
+
+  it('Test 4b: prose-mid forbidden verb does NOT trigger (false-positive avoidance)', async () => {
+    const prose = 'The Canvas Editor lets you rename blocks via the side panel for usability.'
+    const runner = new MockRunner([{ type: 'done', output: prose }])
+    const handler = makeExplainHandler({ runner, timeoutMs: 100 })
+
+    const result = await handler(makeCtx('what does Canvas Editor do?', runner))
+
+    expect(result.intent).toBe('explain')
+    expect(result.status).toBe('ok')
   })
 
   it('Test 5: empty output → status error mentioning empty', async () => {

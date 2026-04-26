@@ -137,6 +137,17 @@ export function makeModifyHandler(opts: ModifyOptions = {}): Handler {
       }
     }
 
+    // Validate identifiers before they reach git branch names or ts-morph queries.
+    // SEV2 fixup #1: blocks LLM hallucinations like "../../../etc" from polluting branch refs.
+    const IDENTIFIER_RE = /^[A-Za-z_$][A-Za-z0-9_$]*$/
+    if (!IDENTIFIER_RE.test(symbol) || !IDENTIFIER_RE.test(newName)) {
+      return {
+        intent: 'modify',
+        status: 'error',
+        error: `invalid identifier: symbol "${symbol}" / newName "${newName}" must match /^[A-Za-z_$][A-Za-z0-9_$]*$/`,
+      }
+    }
+
     let plan
     try {
       plan = await planRename(workDir, symbol, newName)

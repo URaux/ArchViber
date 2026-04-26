@@ -110,25 +110,25 @@ export async function planRename(
     }
   }
 
-  // Check for collision: any OTHER symbol named newName at top-level of any source file
-  const collision = sourceFiles.some((sf) =>
-    sf
-      .getDescendantsOfKind(SyntaxKind.Identifier)
-      .some((id) => {
-        if (id.getText() !== newName) return false
-        const parent = id.getParent()
-        if (!parent) return false
-        const kind = parent.getKind()
-        return (
-          kind === SyntaxKind.ClassDeclaration ||
-          kind === SyntaxKind.InterfaceDeclaration ||
-          kind === SyntaxKind.FunctionDeclaration ||
-          kind === SyntaxKind.VariableDeclaration ||
-          kind === SyntaxKind.TypeAliasDeclaration ||
-          kind === SyntaxKind.EnumDeclaration
-        )
-      })
-  )
+  // SEV2 fixup #3: scope collision check to the SAME source file as the declaration.
+  // Cross-file same-name decls live in different module scopes and don't actually collide.
+  const declSourceFile = declarationNode.getSourceFile()
+  const collision = declSourceFile
+    .getDescendantsOfKind(SyntaxKind.Identifier)
+    .some((id) => {
+      if (id.getText() !== newName) return false
+      const parent = id.getParent()
+      if (!parent) return false
+      const kind = parent.getKind()
+      return (
+        kind === SyntaxKind.ClassDeclaration ||
+        kind === SyntaxKind.InterfaceDeclaration ||
+        kind === SyntaxKind.FunctionDeclaration ||
+        kind === SyntaxKind.VariableDeclaration ||
+        kind === SyntaxKind.TypeAliasDeclaration ||
+        kind === SyntaxKind.EnumDeclaration
+      )
+    })
 
   if (collision) {
     conflicts.push({ kind: 'collision', message: `"${newName}" already exists in the project` })

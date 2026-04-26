@@ -101,10 +101,10 @@ describe('modify handler', () => {
   it(
     'Test 3: collision — rename to already-existing name → status error mentioning rename blocked',
     async () => {
+      // Per W1 D10.5 fixup #3: collision is now same-file scoped — declare both in alpha.ts
       const { projectRoot, cleanup } = await makeTmpProject({
         'tsconfig.json': JSON.stringify({ compilerOptions: { strict: true, noEmit: true } }),
-        'src/alpha.ts': `export class FooService {}\n`,
-        'src/beta.ts': `export class BarService {}\n`,
+        'src/alpha.ts': `export class FooService {}\nexport class BarService {}\n`,
       })
 
       try {
