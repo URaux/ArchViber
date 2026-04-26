@@ -45,6 +45,7 @@ next-env.d.ts
 .planning/*
 !.planning/phase1/
 !.planning/phase2/
+!.planning/phase3/
 design/
 _pf_parts/
 promptfolio_payload.json
