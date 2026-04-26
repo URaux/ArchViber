@@ -1,0 +1,179 @@
+# How to add a new language to ArchViber's ingest pipeline
+
+Phase 2 / W2 introduced a `LanguageAdapter` slot system. ArchViber ships with 5 reference adapters out of the box: TypeScript, Python, Go, Java, and Rust. Adding any new language is roughly **one day of mechanical AST-query work**, no core changes required.
+
+This guide walks through the steps using **Ruby** as an example.
+
+## TL;DR
+
+1. Confirm `tree-sitter-wasms` ships your language's WASM grammar.
+2. Create `src/lib/ingest/languages/<lang>.ts` exporting `<lang>Adapter: LanguageAdapter`.
+3. Register it in `src/lib/ingest/languages/register-defaults.ts`.
+4. Add a test file `tests/lib/ingest/languages/<lang>.test.ts`.
+5. (Optional) Add the new language to `FactLanguage` in `src/lib/ingest/facts.ts` and `EXT_TO_LANGUAGE` so downstream fact-graph features tag it correctly.
+
+## Prerequisites
+
+- Your language has a tree-sitter grammar published as WASM. Check `node_modules/tree-sitter-wasms/out/` — if `tree-sitter-<lang>.wasm` is there, you're good. If not, you'll need to vendor it separately or compile from source.
+- You can read a tree-sitter S-expression dump for your language. Use `npx tree-sitter parse <file>` against the upstream grammar repo to inspect node types.
+
+## Step-by-step (using Ruby)
+
+### 1. Confirm WASM availability
+
+```bash
+ls node_modules/tree-sitter-wasms/out/ | grep ruby
+# → tree-sitter-ruby.wasm
+```
+
+If it's there, no new dep is needed. If it's not, add the language-specific `tree-sitter-<lang>` package (compiled native binding) and load that instead.
+
+### 2. Identify the AST node types you care about
+
+Run a small Ruby file through the grammar:
+
+```ruby
+class Foo
+  def bar
+    puts "hi"
+  end
+end
+```
+
+The tree shape is roughly:
+```
+program
+  class
+    constant (name = Foo)
+    body_statement
+      method
+        identifier (name = bar)
+        body_statement
+          ...
+```
+
+You need to map these to ArchViber's `SymbolKind`:
+
+| Ruby node | SymbolKind |
+|---|---|
+| `class` | `'class'` |
+| `module` | `'class'` (modules are namespace-ish) |
+| `method` | `'function'` (with `attributes.parentClass`) |
+| `singleton_method` | `'function'` (with `attributes.parentClass`) |
+| top-level method | `'function'` |
+| `constant_assignment` | `'const'` |
+
+Imports in Ruby are `require`/`require_relative`/`load` calls — handle them as `call` nodes whose receiver is `require`. Visibility: Ruby is dynamic; treat all top-level constants as exported.
+
+### 3. Create `src/lib/ingest/languages/ruby.ts`
+
+Copy `src/lib/ingest/languages/python.ts` as your starting template. The structure is identical:
+
+```ts
+import { LanguageAdapter, FactInputModule } from './types'
+import Parser from 'web-tree-sitter'
+// ... WASM loader (copy verbatim from python.ts; only the wasm filename differs)
+
+export const rubyAdapter: LanguageAdapter = {
+  id: 'ruby',
+  fileExtensions: ['.rb'],
+  async loadParser() { /* tree-sitter-ruby.wasm */ },
+  extractFacts(tree, sourcePath) { /* walk AST, emit FactInputModule */ },
+  inferTechStack(facts) { /* scan imports for Rails / Sinatra / etc. */ },
+}
+```
+
+Key conventions to match:
+
+- **`extractFacts` returns `FactInputModule`** with `file`, `imports`, `exports`, `symbols`, `language` fields. The `language` value should match the new entry you'll add to `FactLanguage` in step 5.
+- **Symbol dedupe**: use a `Map<string, ParsedSymbol>()` keyed by name. First definition wins.
+- **Path normalization**: `sourcePath.replace(/\\/g, '/')` — store POSIX paths in facts so cross-platform clusters compare correctly.
+- **Method attribution**: nested-in-class methods should carry `attributes.parentClass` so cluster-aware features (e.g. deep-analyze "redteam" perspective) can correlate methods with their owning type.
+- **Tech-stack patterns**: 5-10 RegExp/string pairs is enough. Match against the import path/FQN, return labels like `'Ruby/Rails'`, `'Ruby/Sinatra'`, fallback to `'Ruby'`.
+
+### 4. Register the adapter
+
+`src/lib/ingest/languages/register-defaults.ts`:
+
+```ts
+import { rubyAdapter } from './ruby'
+// ...
+registerAdapter(rubyAdapter)
+```
+
+This is the ONLY place that side-effect-imports the adapter. Tests can import the adapter file directly without triggering registration of the others.
+
+### 5. Tag the language in facts (optional but recommended)
+
+`src/lib/ingest/facts.ts`:
+
+```ts
+export type FactLanguage = '...' | 'ruby'   // add the literal
+
+const EXT_TO_LANGUAGE: Readonly<Record<string, FactLanguage>> = {
+  // ...
+  '.rb': 'ruby',
+}
+```
+
+`src/lib/ingest/pipeline.ts`:
+
+```ts
+const KNOWN: ReadonlySet<FactLanguage> = new Set([
+  // ...
+  'ruby',
+])
+```
+
+### 6. Tests
+
+Create `tests/lib/ingest/languages/ruby.test.ts` mirroring `python.test.ts`. Cover:
+
+- Each symbol kind: 1-2 tests per AST node type you handle (class, method, top-level fn, const)
+- Visibility/exports: 1 test confirming an exported symbol shows up, 1 confirming a private one doesn't (if applicable)
+- Imports: 1 test for each import shape your language supports
+- 3-5 tech-stack inference tests: one per supported framework + one fallback
+- One-line tests are fine — keep the assertions specific (`expect(symbols).toHaveLength(1)`, `expect(symbol.kind).toBe('class')`).
+
+### 7. Verify
+
+```bash
+npx tsc --noEmit
+npx vitest run tests/lib/ingest/languages/ruby.test.ts
+# Plus the e2e: add a small .rb file to tests/fixtures/polyglot/
+npx vitest run tests/lib/ingest/pipeline.test.ts
+```
+
+If the pipeline e2e suddenly counts an extra language in `byLanguage`, your adapter is wired in correctly.
+
+## What you do NOT have to touch
+
+- `src/lib/ingest/cluster.ts` — clustering is language-agnostic
+- `src/lib/ingest/code-anchors.ts` — anchors are language-agnostic
+- `src/lib/ingest/name.ts` — cluster naming is language-agnostic and already supports multi-language clusters
+- `src/lib/orchestrator/*` — orchestrator doesn't care about source language
+
+If you find yourself modifying these, you're probably solving the wrong problem.
+
+## Common pitfalls
+
+- **Visibility keywords are anonymous tokens** in many tree-sitter grammars (e.g. `public` in Java). They appear in `node.children`, NOT `node.namedChildren`. Test with a `pub`/`public`/`export` example early.
+- **WASM init order matters**: call `Parser.init()` ONCE, then `Parser.Language.load()` per language. The shared `getParser()` pattern in the existing adapters does this — don't reimplement.
+- **Don't auto-register inside the adapter file**: keep registration centralized in `register-defaults.ts`. This lets tests import a single adapter without triggering all others' WASM loads.
+- **Path separators**: always emit `'/'` in `FactInputModule.file`. Windows produces `'\\'` from `path.join` — call `.replace(/\\/g, '/')` before assigning to `.file`.
+
+## Reference list of all adapters
+
+| Adapter | File | Tests |
+|---|---|---|
+| TypeScript / TSX / JS / JSX | `src/lib/ingest/languages/typescript.ts` | `tests/lib/ingest/languages/typescript.test.ts` |
+| Python | `src/lib/ingest/languages/python.ts` | `tests/lib/ingest/languages/python.test.ts` |
+| Go | `src/lib/ingest/languages/go.ts` | `tests/lib/ingest/languages/go.test.ts` |
+| Java | `src/lib/ingest/languages/java.ts` | `tests/lib/ingest/languages/java.test.ts` |
+| Rust | `src/lib/ingest/languages/rust.ts` | `tests/lib/ingest/languages/rust.test.ts` |
+
+Pick the closest one to your target language as a starting point. Roughly:
+- **Ruby / PHP / Lua** → start from `python.ts` (dynamic, decorators-like sugar)
+- **Kotlin / Scala / C#** → start from `java.ts` (JVM-style modifiers + annotations)
+- **Swift / Zig / Nim** → start from `rust.ts` (`pub`/`public` keyword + traits/protocols)
+- **C / C++** → start from `go.ts` (no visibility keywords, just naming convention) but add include-tracking
