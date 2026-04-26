@@ -16,8 +16,10 @@ import { tsAdapter } from './typescript'
 import { pythonAdapter } from './python'
 import { goAdapter } from './go'
 import { javaAdapter } from './java'
+import { rustAdapter } from './rust'
 
 registerAdapter(tsAdapter)
 registerAdapter(pythonAdapter)
 registerAdapter(goAdapter)
 registerAdapter(javaAdapter)
+registerAdapter(rustAdapter)
