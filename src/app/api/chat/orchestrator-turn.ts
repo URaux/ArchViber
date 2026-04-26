@@ -29,6 +29,17 @@ export function stringifyHandlerResult(result: HandlerResult): string {
     return `Analysis prepared. ${perspectives.length} perspectives queued: ${perspectives.join(', ')}`
   }
 
+  if (result.intent === 'design_edit' && result.status === 'ok') {
+    const payload = result.payload as { actions: Array<{ action: string; node?: { name?: string; type?: string } }> } | undefined
+    const actions = payload?.actions ?? []
+    return (
+      `Planned ${actions.length} canvas action(s):\n` +
+      actions
+        .map((a) => '- ' + a.action + (a.action === 'add-node' ? ' (' + (a.node?.name ?? a.node?.type ?? '') + ')' : ''))
+        .join('\n')
+    )
+  }
+
   return `${result.intent}\n${JSON.stringify(result.payload, null, 2)}`
 }
 

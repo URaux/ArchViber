@@ -1,9 +1,9 @@
-import { describe, expect, it, vi } from 'vitest'
-import type { AgentBackend, AgentStatus, CustomApiConfig } from '@/lib/agent-runner'
+import { describe, expect, it } from 'vitest'
 import { dispatchIntent } from '@/lib/orchestrator/dispatch'
-import type { AgentRunnerLike, HandlerContext, IrSummary, ClassifyResult } from '@/lib/orchestrator/types'
+import type { HandlerContext, IrSummary, ClassifyResult } from '@/lib/orchestrator/types'
 import { PERSPECTIVE_NAMES } from '@/lib/deep-analyze/types'
 import type { Ir } from '@/lib/ir/schema'
+import { MockRunner } from '../../_helpers/mock-runner'
 
 const baseSummary: IrSummary = {
   projectName: 'ArchViber',
@@ -17,51 +17,6 @@ const baseSummary: IrSummary = {
 
 function makeClassify(intent: ClassifyResult['intent'], fallback = false): ClassifyResult {
   return { intent, confidence: 0.9, rawOutput: '', fallback, fallbackReason: fallback ? 'low' : undefined }
-}
-
-interface MockStatus {
-  agentId: string
-  nodeId: string
-  prompt: string
-  backend: AgentBackend
-  workDir: string
-  status: AgentStatus
-  output: string
-  errorMessage?: string
-  exitCode?: number | null
-}
-
-class MockRunner implements AgentRunnerLike {
-  private nextId = 0
-  private readonly statusById = new Map<string, MockStatus>()
-
-  readonly spawnAgent = vi.fn(
-    (
-      _nodeId: string,
-      _prompt: string,
-      _backend: AgentBackend,
-      _workDir: string,
-      _model?: string,
-      _customApiConfig?: CustomApiConfig,
-      _ccSessionId?: string,
-      _systemPrompt?: string
-    ): string => {
-      const agentId = 'agent-' + String(this.nextId++)
-      this.statusById.set(agentId, {
-        agentId,
-        nodeId: _nodeId,
-        prompt: _prompt,
-        backend: _backend,
-        workDir: _workDir,
-        status: 'running',
-        output: '',
-      })
-      return agentId
-    }
-  )
-
-  readonly getStatus = vi.fn((agentId: string) => this.statusById.get(agentId) ?? null)
-  readonly stopAgent = vi.fn((_agentId: string): void => { return })
 }
 
 const minimalIr: Ir = {
@@ -89,10 +44,12 @@ function makeCtx(overrides: Partial<HandlerContext> = {}): HandlerContext {
 
 describe('orchestrator/dispatch', () => {
   it('routes design_edit intent to design_edit handler', async () => {
-    const ctx = makeCtx({ classifyResult: makeClassify('design_edit') })
+    const actionOutput = JSON.stringify([{ action: 'add-node', node: { type: 'block', name: 'Test' } }])
+    const runner = new MockRunner([{ type: 'done', output: actionOutput }])
+    const ctx = makeCtx({ classifyResult: makeClassify('design_edit'), runner })
     const result = await dispatchIntent(ctx)
     expect(result.intent).toBe('design_edit')
-    expect(result.status).toBe('not_implemented')
+    expect(result.status).toBe('ok')
   })
 
   it('routes build intent to build handler', async () => {
