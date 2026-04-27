@@ -4,8 +4,8 @@ import { applyDriftIgnore } from '@/lib/policy/filter'
 import type { DriftReport } from '@/lib/drift/detect'
 import type { IrBlock, IrContainer, IrEdge } from '@/lib/ir/schema'
 
-function block(id: string): IrBlock {
-  return { id, name: id, description: '', status: 'idle', container_id: null, code_anchors: [] }
+function block(id: string, tags?: string[]): IrBlock {
+  return { id, name: id, description: '', status: 'idle', container_id: null, code_anchors: [], ...(tags ? { tags } : {}) }
 }
 function container(id: string): IrContainer {
   return { id, name: id, color: 'blue' }
@@ -82,5 +82,30 @@ describe('applyDriftIgnore', () => {
     const policy = { drift: { ...DEFAULT_POLICY.drift, ignoreBlockIds: ['b1'] } }
     applyDriftIgnore(r, policy)
     expect(r.addedBlocks).toHaveLength(2)
+  })
+
+  it('drops block when its tag matches ignoreTags', () => {
+    const r = reportWith({
+      addedBlocks: [block('b1', ['generated']), block('b2', ['manual'])],
+      removedBlocks: [block('b3', ['generated', 'cache'])],
+    })
+    const policy = { drift: { ...DEFAULT_POLICY.drift, ignoreTags: ['generated'] } }
+    const filtered = applyDriftIgnore(r, policy)
+    expect(filtered.addedBlocks.map((b) => b.id)).toEqual(['b2'])
+    expect(filtered.removedBlocks).toHaveLength(0)
+  })
+
+  it('keeps block when none of its tags match ignoreTags', () => {
+    const r = reportWith({ addedBlocks: [block('b1', ['manual']), block('b2')] })
+    const policy = { drift: { ...DEFAULT_POLICY.drift, ignoreTags: ['generated'] } }
+    const filtered = applyDriftIgnore(r, policy)
+    expect(filtered.addedBlocks).toHaveLength(2)
+  })
+
+  it('keeps block with no tags when ignoreTags is set', () => {
+    const r = reportWith({ removedBlocks: [block('b1'), block('b2', ['generated'])] })
+    const policy = { drift: { ...DEFAULT_POLICY.drift, ignoreTags: ['generated'] } }
+    const filtered = applyDriftIgnore(r, policy)
+    expect(filtered.removedBlocks.map((b) => b.id)).toEqual(['b1'])
   })
 })

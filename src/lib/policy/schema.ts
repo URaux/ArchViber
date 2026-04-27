@@ -29,6 +29,8 @@ export const driftPolicySchema = z
     ignoreBlockIds: z.array(z.string()).default([]),
     ignoreContainerIds: z.array(z.string()).default([]),
     ignoreEdgeIds: z.array(z.string()).default([]),
+    /** Drop any block whose tags? array contains ANY of these strings. */
+    ignoreTags: z.array(z.string()).default([]),
   })
   .strict()
 
@@ -52,5 +54,6 @@ export const DEFAULT_POLICY: Policy = {
     ignoreBlockIds: [],
     ignoreContainerIds: [],
     ignoreEdgeIds: [],
+    ignoreTags: [],
   },
 }
