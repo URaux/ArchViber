@@ -1,6 +1,8 @@
 import type { Ir } from '@/lib/ir'
 import { summarizeIr, classifyIntent, dispatchIntent } from '@/lib/orchestrator'
 import { recordTurnStart, recordClassification, recordDispatch } from '@/lib/orchestrator/log'
+import { appendDispatchTrace, hashPrompt as traceHashPrompt } from '@/lib/orchestrator/trace'
+import type { DispatchTrace } from '@/lib/orchestrator/trace'
 import type { HandlerResult } from '@/lib/orchestrator/types'
 import type { ChatRequest } from './types'
 import crypto from 'node:crypto'
@@ -78,6 +80,7 @@ export async function runOrchestratorTurn({
   ir: Ir
   request: Request
 }): Promise<Response | null> {
+  const turnStart = Date.now()
   const turnRecord = recordTurnStart({
     userPromptHash: hashPrompt(payload.message),
     irBlocks: ir.blocks.length,
@@ -119,6 +122,17 @@ export async function runOrchestratorTurn({
     status: result.status,
     error: result.error,
   })
+
+  const trace: DispatchTrace = {
+    timestamp: new Date().toISOString(),
+    intent: result.intent,
+    promptHash: traceHashPrompt(payload.message),
+    classifierConfidence: classifyResult.confidence,
+    dispatchStatus: result.status,
+    error: result.error,
+    durationMs: Date.now() - turnStart,
+  }
+  void appendDispatchTrace(trace)
 
   if (result.status === 'not_implemented') {
     return null
