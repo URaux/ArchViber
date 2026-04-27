@@ -38,6 +38,7 @@ export type FactLanguage =
   | 'ocaml'
   | 'bash'
   | 'elm'
+  | 'elm'
   | 'rescript'
 
 export interface FactModuleNode {
