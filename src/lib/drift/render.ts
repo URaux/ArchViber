@@ -9,6 +9,7 @@
  */
 
 import type { DriftReport, BlockChange } from './detect'
+import { computeDriftSeverity } from './severity'
 
 const MAX_PER_SECTION = 8
 
@@ -46,7 +47,9 @@ export function renderDriftMarkdown(report: DriftReport): string {
     .filter((s) => s.length > 0)
     .join(', ')
 
-  out.push(`**Drift detected**: ${totals}.`)
+  const severity = computeDriftSeverity(report)
+  const badge = severity.level === 'critical' ? '🔴' : severity.level === 'major' ? '🟡' : '🟢'
+  out.push(`**Drift detected** ${badge} \`${severity.level}\` (score: ${severity.score}): ${totals}.`)
   out.push('')
 
   if (report.addedBlocks.length > 0) {
