@@ -34,6 +34,11 @@ export type FactLanguage =
   | 'go'
   | 'java'
   | 'rust'
+  | 'solidity'
+  | 'ocaml'
+  | 'bash'
+  | 'elm'
+  | 'rescript'
 
 export interface FactModuleNode {
   kind: 'module'
@@ -178,6 +183,14 @@ const EXT_TO_LANGUAGE: Readonly<Record<string, FactLanguage>> = {
   '.go': 'go',
   '.java': 'java',
   '.rs': 'rust',
+  '.sol': 'solidity',
+  '.ml': 'ocaml',
+  '.mli': 'ocaml',
+  '.sh': 'bash',
+  '.bash': 'bash',
+  '.res': 'rescript',
+  '.resi': 'rescript',
+  '.elm': 'elm',
 }
 
 function inferLanguage(
@@ -347,7 +360,7 @@ interface ImportEdgeKey {
 }
 
 function importEdgeKey(k: ImportEdgeKey): string {
-  return `${k.source}\u0000${k.target}\u0000${k.specifier}`
+  return `${k.source} ${k.target} ${k.specifier}`
 }
 
 /**
