@@ -185,3 +185,64 @@ describe('persistent telemetry (Phase 3)', () => {
     expect(latest.dispatchStatus).toBe('ok')
   })
 })
+
+// ---------------------------------------------------------------------------
+// Date-range filter tests — Phase 3 (telemetry-date-filter)
+// ---------------------------------------------------------------------------
+
+describe('readRecentPersistedTurns date filter', () => {
+  let logFile: string
+
+  const makeEntry = (ts: string, hash: string) => ({
+    timestamp: ts,
+    userPromptHash: hash,
+    irBlocks: 1,
+  })
+
+  beforeEach(async () => {
+    logFile = path.join(tmpDir, 'orchestrator-date-filter-log.jsonl')
+    process.env.ARCHVIBER_TELEMETRY_FILE = logFile
+    delete process.env.ARCHVIBER_TELEMETRY
+
+    const entries = [
+      makeEntry('2026-01-01T00:00:00.000Z', 'jan'),
+      makeEntry('2026-03-15T12:00:00.000Z', 'mar'),
+      makeEntry('2026-06-30T23:59:59.000Z', 'jun'),
+    ]
+    await fs.mkdir(path.dirname(logFile), { recursive: true })
+    await fs.writeFile(logFile, entries.map((e) => JSON.stringify(e)).join('\n') + '\n', 'utf8')
+  })
+
+  afterEach(() => {
+    delete process.env.ARCHVIBER_TELEMETRY_FILE
+    delete process.env.ARCHVIBER_TELEMETRY
+  })
+
+  it('since filters out entries before the cutoff', async () => {
+    const result = await readRecentPersistedTurns(100, { since: '2026-02-01T00:00:00.000Z' })
+    expect(result.map((r) => r.userPromptHash)).toEqual(['mar', 'jun'])
+  })
+
+  it('until filters out entries after the cutoff', async () => {
+    const result = await readRecentPersistedTurns(100, { until: '2026-04-01T00:00:00.000Z' })
+    expect(result.map((r) => r.userPromptHash)).toEqual(['jan', 'mar'])
+  })
+
+  it('since + until together return only entries in window', async () => {
+    const result = await readRecentPersistedTurns(100, {
+      since: '2026-02-01T00:00:00.000Z',
+      until: '2026-05-01T00:00:00.000Z',
+    })
+    expect(result.map((r) => r.userPromptHash)).toEqual(['mar'])
+  })
+
+  it('no opts returns all entries unchanged', async () => {
+    const result = await readRecentPersistedTurns(100)
+    expect(result.map((r) => r.userPromptHash)).toEqual(['jan', 'mar', 'jun'])
+  })
+
+  it('since beyond last entry returns empty array', async () => {
+    const result = await readRecentPersistedTurns(100, { since: '2027-01-01T00:00:00.000Z' })
+    expect(result).toEqual([])
+  })
+})
