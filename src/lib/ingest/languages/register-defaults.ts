@@ -17,9 +17,13 @@ import { pythonAdapter } from './python'
 import { goAdapter } from './go'
 import { javaAdapter } from './java'
 import { rustAdapter } from './rust'
+import { solidityAdapter } from './solidity'
+import { bashAdapter } from './bash'
 
 registerAdapter(tsAdapter)
 registerAdapter(pythonAdapter)
 registerAdapter(goAdapter)
 registerAdapter(javaAdapter)
 registerAdapter(rustAdapter)
+registerAdapter(solidityAdapter)
+registerAdapter(bashAdapter)

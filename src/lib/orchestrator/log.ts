@@ -128,8 +128,11 @@ export async function persistTurn(record: TurnRecord): Promise<void> {
 }
 
 /** Read the last N entries from the persistent log. Used by dashboards/tests. */
-export async function readRecentPersistedTurns(limit = 100): Promise<TurnRecord[]> {
-  const target = telemetryPath()
+export async function readRecentPersistedTurns(
+  limit = 100,
+  opts: { since?: string; until?: string; path?: string } = {}
+): Promise<TurnRecord[]> {
+  const target = opts.path ?? telemetryPath()
   let text: string
   try {
     text = await fs.readFile(target, 'utf8')
@@ -138,12 +141,18 @@ export async function readRecentPersistedTurns(limit = 100): Promise<TurnRecord[
     if (code === 'ENOENT') return []
     throw err
   }
+  const sinceMs = opts.since ? new Date(opts.since).getTime() : undefined
+  const untilMs = opts.until ? new Date(opts.until).getTime() : undefined
   const lines = text.split('\n').filter((l) => l.length > 0)
   const tail = lines.slice(Math.max(0, lines.length - limit))
   const out: TurnRecord[] = []
   for (const line of tail) {
     try {
-      out.push(JSON.parse(line) as TurnRecord)
+      const record = JSON.parse(line) as TurnRecord
+      const ts = new Date(record.timestamp).getTime()
+      if (sinceMs !== undefined && ts < sinceMs) continue
+      if (untilMs !== undefined && ts > untilMs) continue
+      out.push(record)
     } catch {
       // Skip malformed lines silently — don't block reads on a stray bad write.
     }
